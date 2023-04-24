@@ -501,17 +501,57 @@ Hidrogeno(){
 semaphore mutex = 1;
 int esperando = 0;
 bool lleno = false;
-semaphore sofa[4] = {1,1,1,1}
+semaphore sofa = 4;
+atomic<queue> esperandoCorte;
+int clientes[20] = {0...0};
+semaphore pagar = 1;
 
 proc Cliente(i){
-    if(lleno)
+    if(lleno) <- si el local está lleno, me voy.
         return;
     mutex.wait();
+    if(esperando < 3)
+        barbero.signal(); <- si había menos de 3 esperando, cada cliente que entra debe despertar a un barbero.
     esperando++;
-    if(esperando == 20)
-        lleno = true;
+    if(esperando == 20) 
+        lleno = true; <- si hay 20 esperando, la sala está llena, no entran mas.
     mutex.signal();
 
-    
+    sofa.wait(); <- espera un lugar para sentarse
+    sentarseEnSofa(); <- se sienta
+    esperandoCorte.queue(i); <- se agrega atómicamente a una cola, para que los que mas tiempo
+                                pasaron sentados sean llamados primero.
 
+    clientes[i].wait(); <- el cliente espera a que algún barbero lo llame.
+
+    sofa.signal(); <- libera un lugar del sofá
+    sentarseEnSilla(); <- se sienta.
+
+    clientes[i].signal() <- le avisa al barbero que ya se sentó.
+    clientes[i].wait(); <- espera a que el barbero finalice de cortarle el pelo.
+
+    pagar.wait(); <- espera a poder pagar.
+    pagar(); <- paga.
+    clientes[i].signal(); <- le avisa a algún barbero que ya pagó.
+    pagar.signal(); <- libera al barbero.
+    salir();
+}
+
+proc Barbero(i){
+    while(1){
+        mutex.wait();
+        if(esperando == 0) barbero.wait(); <- si no hay nadie, se van a dormir.
+        mutex.signal();
+
+        int proximoCliente;
+        esperandoCorte.dequeue(&proximoCliente); <- obtiene atómicamente al cliente que mas tiempo
+                                                    pasó sentado.
+        clientes[proximoCliente].signal(); <- llama a ese cliente para que se siente.
+        clientes[proximoCliente].wait(); <- espera a que el cliente se haya sentado.
+
+        cortarCabello(proximoCliente); <- le corta el cabello.
+        clientes[i].signal(); <- le avisa que ya terminó de cortarle
+        clientes[i].wait(); <- espera a que el cliente pague.
+        aceptarPago(proximoCliente); <- acepta el pago del cliente.
+    }
 }
