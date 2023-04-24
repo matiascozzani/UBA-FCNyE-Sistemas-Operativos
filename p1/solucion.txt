@@ -1,0 +1,57 @@
+void cerrarPipes(int i, int (*pipes)[8][2]){
+    for(int j = 0; j < 8; j++){
+        if(j!=i){
+            close((*pipes)[j][0]);
+            close((*pipes)[j][1]);
+        }
+        else{
+            close((*pipes)[i][0]);
+        }
+    }
+}
+
+int proceso(int i, int* lista, int (*pipes)[8][2]){
+    cerrarPipes(i, pipes);
+    int promedio = calcular_promedio(lista);
+    write((*pipes)[i][1], &promedio, sizeof(promedio));
+    exit(0);
+}
+
+
+int main(int argc, char* argv[]){
+    int pipes[8][2];
+    if(pipe(pipes)==-1){
+        perror("ERROR");
+        exit(EXIT_FAILURE);
+    }
+    int filefd = open(argv[1], O_RDONLY);
+    int count = 0;
+    int lista;
+    while(cargar_fila(filefd, &lista)){
+        if(count < CORES){
+            count++;
+            int pid = fork();
+            if(pid==-1) perror("ERROR");
+            if(pid==0){
+                proceso(count-1, &lista, &pipes);
+            }
+        }else{
+            wait(NULL);
+            count--;
+        }
+    }
+    
+    int promedios[8];
+    for(int i = 0; i < 8; i++){
+        close(pipes[i][1]);
+        read(pipes[i][0], &promedios[i], sizeof(int));
+        close(pipes[i][0]);
+    }
+    sort(promedios);
+    for (int i = 0; i < N; i++) {
+        printf("%d ", promedios[i]);
+    }
+
+    return 0;
+
+}

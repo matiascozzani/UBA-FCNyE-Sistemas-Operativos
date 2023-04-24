@@ -1,0 +1,128 @@
+1)
+
+semaphore productor = 1;
+semaphore consumidor1 = 0;
+semaphore consumidor2 = 0;
+
+//Productor
+while(1){
+
+    productor.wait();
+    producir();
+    producir();
+    consumidor1.signal();
+
+}
+//Consumidor1
+while(1){
+    consumidores.wait();
+    consumir1();
+    consumidor2.signal();
+}
+
+//consumidor2
+while(1){
+    consumidor2.wait();
+    consumir2();
+    productor.signal();
+}
+
+2) 
+semaphore ready = 0;
+//A
+a1();
+ready.signal();
+a2();
+
+
+
+//B
+b1();
+ready.wait();
+b2();
+
+3)
+semaphore ready = 0;
+semaphore readyB = 0;
+
+//a1
+a1();
+ready.wait();
+readyB.signal();
+a2();
+
+
+b1();
+ready.signal();
+readyB.wait();
+b2();
+
+4)
+
+semaphore experimentar = 0;
+semaphore mutex = 1;
+int count = 0;
+
+
+    implementarTp();
+    mutex.wait();
+    count++;
+    mutex.signal(); <- modifico count de manera segura
+    if(count == N)
+        experimentar.signal(); <- si soy el último, despierto 1 experimentación
+    experimentar.wait(); <- todos se bloquean acá hasta que el último haya implementadoTP
+    experimentar.signal() <- una vez uno despertó, desencadeno signals para despertar el resto
+    experimentar(); 
+}
+
+Otra opción:
+
+void barrera_signal(int n){
+    for(int i = 0; i < N, i++){
+        barrera.signal();
+    }
+}
+
+    implementarTP();
+    mutex.wait();
+    count++;
+    mutex.signal();
+
+    if(count == N): barrera_signal(n); <- en vez de desencadenar, despierto a todos.
+
+    barrera.wait();
+    experimentar();
+
+Si agregamos el if al mutex, garantizamos que no sucede que se corte en el medio de la evaluación dejando pasar 1 de más-
+iterativo:
+semaphore experimentar1 = 0;
+semaphore experimentar2 = 1;
+semaphore mutex = 1;
+int count = 0;
+
+while(1){
+
+    implementarTp();
+    mutex.wait();
+    count++;
+    if(count == N)
+        experimentar2.wait(); <- cuando soy el último, dejo pasar 1 solo (el semaforo estaba en 1)
+        experimentar1.signal(); <- ese mismo despierta a alguno esperando la primer barrera
+    mutex.signal();
+
+    experimentar1.wait(); <- primer barrera
+    experimentar1.signal(); <- desencadeno wakeups
+
+    experimentar();
+
+    mutex.signal();
+    n--;
+    if(n == 0){
+        experimentar1.wait(); <- cuando todos los procesos experimentaron, bajo la primer barrera -"reconfiguro la barrera para prox iteracion"-
+        experimentar2.signal(); <- destrabo la segunda barrera
+    }
+    mutex.signal();
+
+    experimentar2.wait(); <- todos esperan acá hasta que alguno levante la barrera
+    experimentar2.signal(); <- desencadeno wakeups
+}

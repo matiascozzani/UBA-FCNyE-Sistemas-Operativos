@@ -1,0 +1,351 @@
+1)  0-2: ráfaga CPU.
+    2-10: ráfaga E/S.
+    11-13: ráfaga CPU.
+    13-20: ráfaga E/S.
+    21-22: ráfaga CPU.
+
+2) Para planificar estos ejercicios es mejor utilizar un algoritmo basado en prioridades.
+    Esto se debe a que con un algoritmo round-robin los tres procesos recibirían exactamente
+    la misma cantidad de quantums. Esto no es necesariamente un problema, pero si comparamos
+    P0 y P2 vemos que P0 necesita menos quantums que P2 para resolverse. Por lo tanto,
+    ponerlo primero podría significar una mejor experiencia de usuario si estos procesos
+    son de tipo interactivo por ejemeplo. También es cierto
+    que hace falta considerar que comportamientos en particular implementa cada proceso,
+    bien podría darse el caso de que P0 efectúe operaciones críticas para el funcionamiento
+    del programa y por ello necesitar una prioridad mas alta.
+
+3) Este esquema de transiciones representa un algoritmo round-robin.
+
+4) b)   Un scheduling por prioridades puede producir starvation en condiciones tales que nunca paran
+        de llegar procesos con prioridades altas que monopolizan los recursos del CPU.
+    
+    c)  Un algoritmo SJF también puede presentar starvation con el caso inverso análogo
+        al de un algoritmo de prioridades: nunca paran de entrar procesos de corta duración
+        por lo que el scheduler siempre asigna los recursos a estos procesos y nunca
+        a los procesos de larga duración.
+
+    d)  Aunque un algoritmo SRTF es una evolución del SJF y en parte resuelve los problemas
+        de starvation, en casos muy extremos también puede presentarlo:
+        Si cada vez que un proceso está tomando CPU entra un proceso que requiere menos tiempo
+        que el restante de este proceso y eso sucede ad-infinitum entonces nuevamente se configura
+        un escenario de starvation.
+    
+    f)  Dado que las colas multinivel pueden implementar cada una su propio algoritmo de planificación
+        la respuesta a si un algoritmo de este estilo puede presentar starvation depende de
+        que algoritmos implemente cada cola.
+
+5)  Esta modificación permitiría que un proceso que potencialmente necesita mas 
+    tiempo de CPU para poder terminar efectivamente tenga mas turnos dentro del esquema round-robin
+    pero intentando ser lo mas equitativo posible.
+
+    Ventajas:
+        - Procesos encolados mas de una vez tienen mas posibilidades de ser seleccionados.
+        - Procesos encolados mas de una vez potencialmente reciben mas CPU, por ende terminan antes.
+    Desventajas:
+        - Procesos encolados menos veces pueden potencialmente presentar condiciones de starvation.
+        - Al haber mas entradas dentro de la lista de procesos ready, el algoritmo en general se vuelve menos eficiente.
+    
+    Asociar a cada proceso un entero que cuente por la cantidad de veces que estaría encolado dentro de la lista de proceso ready
+    permitiría mantener las ventajas.
+
+6)
+a) 
+
+a) FCFS:
+
+          P₁ P₂ P₃ P₄    P₅
+|----------I-I--I-I------|
+          10 11 13 14    19
+
+Wₜ(P₁) = 0
+Wₜ(P₂) = 10
+Wₜ(P₃) = 11 → Wₜ = 0 + 10 + 11 + 13 + 14 = 48 / 5 = 9,6
+Wₜ(P₄) = 13
+Wₜ(P₅) = 14
+
+SJF:
+  P₂P₄ P₃    P₅        P₁
+|-I-I--I-----I---------|
+  1 2  4     9         10
+  
+Wₜ(P₁) = 9
+Wₜ(P₂) = 0
+Wₜ(P₃) = 2 → Wₜ = 0 + 9 + 2 + 1 + 1 = 13 / 5 = 2,6
+Wₜ(P₄) = 1
+Wₜ(P₅) = 4
+
+Prioridades non-preemptive:
+
+  P₂    P₅ P₃        P₁ P₄
+|-I-----I--I----------I-|
+  1     6  8         18 19
+
+Wₜ(P₁) = 8
+Wₜ(P₂) = 0
+Wₜ(P₃) = 6 → Wₜ = 0 + 8 + 6 + 18 + 1 = 33 / 5 = 6,6
+Wₜ(P₄) = 18
+Wₜ(P₅) = 1
+
+T(P₁) = 10
+T(P₂) = 1
+T(P₃) = 2 → T = 10 + 1 + 2 + 1 + 5 = 19 / 5 = 3,8
+T(P₄) = 1
+T(P₅) = 5
+
+En estos 3 casos, el Turnaround coincide dado que al no haber desalojo
+cada vez que un proceso arranca a ejecutarse corre hasta que termina.
+
+Round-Robin (Quantum = 1):
+
+   P₁ P₂ P₃ P₄ P₅ P₁ P₃ P₅ P₁ P₅ P₁ P₅ P₁ P₅ P₁ P₁ P₁ P₁ P₁
+|--I--I--I--I--I--I--I--I--I--I--I--I--I--I--I--I--I--I--|
+   1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19
+
+Wₜ(P₁) = 9
+Wₜ(P₂) = 1
+Wₜ(P₃) = 5 → Wₜ = 0 + 8 + 6 + 18 + 1 = 26 / 5 = 5,2
+Wₜ(P₄) = 3
+Wₜ(P₅) = 8
+
+T(P₁) = 19
+T(P₂) = 1
+T(P₃) = 5 → T = 19 + 1 + 5 + 1 + 10 = 36 / 5 = 7,2
+T(P₄) = 1
+T(P₅) = 10
+
+El menor Waiting Time Promedio se obtiene en SJF, el menor turnaround también.
+
+7)
+a) 
+Wₜ(P₁) = 0
+Wₜ(P₂) = 9
+Wₜ(P₃) = 4 → Wₜ = 0 + 9 + 4 + 15 + 8 = 36 / 5 = 7,2
+Wₜ(P₄) = 15
+Wₜ(P₅) = 8
+
+T(P₁) = 3
+T(P₂) = 12
+T(P₃) = 4 → T = 3 + 12 + 4 + 5 + 2 = 26 / 5 = 5,2
+T(P₄) = 5
+T(P₅) = 2
+
+Es un scheduler SRT que es una versión preemptive de SJF.
+Arranca el P₁ en el instante 0 y no hay otros procesos, por lo que se lo pone a correr.
+Cuando en el instante 2 llega P₂ con 6 rafagas, a P₁ le queda 1 rafaga, por lo que termina de correr.
+En el instante 3, tenemos a P₂ en READY solamente, por lo que se lo deja correr.
+Corre 1 ráfaga, y en el instante 4 llega P₃ cuya duración es de 4, por lo que se desaloja P₂ (que aún tiene 5 ráfagas)
+y se le da el CPU a P₃. En el instante 6 llega P₄ -5 ráfagas-, pero se deja correr P₃ porque le quedan solo 2 ráfagas.
+En el instante 8, llega P₅ -2 rafagas- y se lo aloja (a P₂ y P₄ le faltan 5).
+Cuando termina P₅, es momento de alojar o bien P₂ o bien P₅, se decide correr P₂ y luego P₅ -quizás por "aging"-.
+
+Podemos ver que cada vez que existe un proceso con menor tiempo restante que el que esta corriendo actualmente,
+se desaloja el CPU para darle lugar.
+
+8) 
+
+a) 
+FCFS:
+- = 0,2
+
+
+                                    P₁                   P₂    P₃
+|-----------------------------------I--------------------I-----|
+                                    8                    12    13
+T(P₁) = 8
+T(P₂) = 12.6
+T(P₃) = 13
+
+Tₚᵣₒₘ = 11,2
+
+SJF(preemptive):
+- = 0,2
+
+ P₁  P₂  P₃     P₂                      P₁
+|--I---I----I----------------I------------------------------------------I
+ 0,4   1    2                3
+T(P₁) = 13
+T(P₂) = 2,6
+T(P₃) = 1
+
+Tprom = 5,54
+
+SJF(non-preemptive):
+- = 0,2
+
+            P₁                         P₃       P₂
+|-----------------------------------I-----I--------------------|
+                                    8     9                    13
+T(P₁) = 8
+T(P₂) = 12,6
+T(P₃) = 8
+
+Tprom = 9,53
+
+c)
+- = 0,2
+  idle  P₃         P₂                   P₁
+|-----I-----I--------------------I----------------------------------------|
+      1     2                    6                                        13
+T(P₁) = 13
+T(P₂) = 5,6
+T(P₃) = 1
+
+Tprom = 6,53
+
+9)
+FCFS:
+- = 0,5
+
+ P₁     P₂               P₃     P₄
+|--I--------------------I--I--------------------|
+   6                    16 17                   27
+
+W(P₁) = 0
+W(P₂) = 0
+W(P₃) = 9
+w(P₄) = 9
+
+Wprom = 4,5
+
+T(P₁) = 1
+T(P₂) = 10
+T(P₃) = 10
+T(P₄) = 19
+
+Tprom = 10
+
+RR(quantum = 10):
+- = 0,5
+ P₁     P₂               P₃     P₄
+|--I--------------------I--I--------------------|
+   6                    16 17                   27
+10)
+
+a)
+RoundRobin(quantum=5):
+  P₁    P₂    P₁  P₂  P₃    P₄  P₃
+|-----I-----I---I---I-----I-----I-|
+      5     10  13  16    21    26 27
+
+T(P₁) = 13
+T(P₂) = 11
+T(P₃) = 13
+T(P₄) = 11
+
+Tprom = 12
+
+SRTF(SJF preemptive):
+  P₁        P₂      P₄    P₃
+|--------I--------I-----I------I
+         8        16    21     27
+
+T(P₁) = 8
+T(P₂) = 8
+T(P₃) = 13
+T(P₄) = 6
+
+Tprom = 8,75
+
+El algoritmo SRTF presenta un Turnaround promedio mucho menor,
+pero a costa de una cantidad significativa de Fairness. El proceso P₃ entra en la ráfaga 14
+y no obtiene ni un ciclo de CPU hasta la ráfaga 21. Por el contrario, en el esquema RoundRobin
+si bien el turnaround es el mismo, P₃ llega en el instante 14 y obtiene CPU en el 16.
+
+Supongamos que P₃ es un proceso interactivo, mientras que P₄ es un proceso CPU-intensivo.
+En el esquema round-robin el usuario tiene respuesta del proceso de una manera más rápida,
+mientras que con SRTF tarda mucho tiempo en tener una respuesta.
+
+11)a)
+ P₁P₂P₁P₂P₁P₂P₁
+|-I-I-I-I-I-I-I-I-I-|
+  1 2 3 4 5 6 7
+                  P₃      P₄
+|-------------I--------I-----|
+              7        15    20
+T(P₁) = 7
+T(P₂) = 6
+T(P₃) = 15
+T(P₄) = 10
+
+Tprom = 9,5
+
+W(P₁) = 3
+W(P₂) = 3
+W(P₃) = 7
+w(P₄) = 5
+
+Wprom = 4,5
+
+12) Podemos pensarlo de la siguiente manera:
+
+Al darle tiempo de CPU a aquellos procesos que menor cantidad de CPU utilizaron recientemente
+ocurre lo siguiente: Si hay procesos de E/S típicamente se bloquean y utilizan poco CPU,
+por lo que el scheduler puede desalojarlos en el momento en que se bloqueen. Si una cantidad
+significativa de ellos ha corrido más que algunos que sean CPU-intensivos (por ende, los procesos 
+E/S han sido favorecidos hasta ahora) eventualmente ocurrirá que los que menos han tenido CPU
+últimamente fueron precisamente los CPU-intensivos por lo que serán una opcion víable a tomar
+para esta política de scheduling. Análogamente, cuando hayan corrido algunos CPU-intensivos
+los de E/S volverán a ser los que menos CPU han obtenido últimamente y podrán ser alojados denuevo.
+
+Si lo pensamos mas abstractamente, esta política de scheduling tiene un alto nivel de Fairness,
+lo que provoca que el riesgo de starvation sea menor, dado que ámbos conceptos están profundamente relacionados.
+
+13)
+
+La respuesta en los tres casos es: depende de la implementación y las circustancias de uso.
+Es decir,
+    
+    - La política FIFO favorece -por definición- a cualquier proceso que haya llegado primero,
+      sin embargo, al no haber desalojo, los procesos largos siempre obtendrán mayor cantidad de CPU
+      que los procesos chicos (lógicamente, pues si no es preemptive el procesador se obtiene por la duración del proceso)
+      por lo que los chicos a fin de cuentas siempre se verán desfavorecidos en favor de los largos.
+
+    - La política Round-Robin es mas justa, reparte equitativamente el procesador entre los procesos.
+      Cuando los procesos son largos, tendrán mayor cantidad de veces interrumpida su disponibilidad de CPU
+      por lo que los cortos podrán terminar antes que con la política FIFO, por ejemplo, en este sentido
+      los cortos se ven un poco mas favorecidos.
+
+    - La política de multilevel feedback queue definitivamente es la que mas depende de la implementación.
+      Si, por ejemplo, implementamos dos colas: la primera de mayor prioridad para los procesos cortos con una política SJF
+      y la segunda de menor prioridad para procesos mas largos con una política round-robin, donde el feedback
+      se expresa en función de cuanto E/S realizan, los procesos cortos se ven claramente beneficiados por sobre los otros.
+
+      Ahora bien, podríamos implementarla exactamente al revés y entonces la situación es la inversa:
+      los procesos cortos serán siempre desfavorecidos en función de los mas largos.
+
+14) Esta situación puede abordarse con una política de Multilevel Queue.
+
+La primer cola, de mayor prioridad, que implementa una política round-robin de quantum intermedio.
+Esto nos garantiza que toda alarma enviada por el sistema podrá ser comenzada a interpretar rápidamente
+Si pudieramos estudiar los sistemas y determinar la duración aproximada de los procesos de las alarmas,
+una mucho mejor opción podría ser utilizar una política STRF para la primer cola.
+
+La segunda cola podría implementar un round-robin para dividir equitativamente el CPU entre ellas.
+
+Los procesos alarma siempre van a la primer cola, el resto de las tareas en la segunda.
+
+No se cree que sea correcto que el scheduler presente algun tipo de feedback, pues las alarmas
+poseen un nivel de urgencia tal que es siempre de mayor importancia atenderlas todas mas que al resto de las tareas.
+Si hay muchas seguidas, todas deben ser atendidas y no habría motivo por el que el resto de tareas 
+debiera seguir corriendo hasta que eso haya ocurrido.
+
+15) Utilizaría una política round-robin.
+Principalmente porque en definitiva se está buscando balancear dos cosas:
+Por un lado que haya una cantidad de trabajos por únidad de tiempo terminados relativamente alta,
+por otro que los procesos que son interactivos tengan buena respuesta. En otras palabras:
+que tanto los procesos de procesamiento de datos y los procesos de trabajos interactivos reciban
+-mas o menos- la misma cantidad de CPU, es decir, se busca una politica fair.
+
+Entre FCFS y Round-Robin, round-robin es significativamente mas fair, por lo que tiene mucho sentido utilizarla.
+
+16)
+
+Podría implementarse una multilevel-queue.
+
+Por un lado, una primer cola de menor prioridad donde irán a parar los procesos de ajuste de brillo, contraste y zoom
+con un algoritmo FCFS.
+Por otro lado, una cola de mayor prioridad con un algoritmo STRF.
+
+
+17)
+

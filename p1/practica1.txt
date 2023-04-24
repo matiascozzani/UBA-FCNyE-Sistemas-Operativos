@@ -1,0 +1,520 @@
+1) Los pasos que deben llevarse acabo son: guardar dentro del PCB el estado actual de los registros, y el Instruction Pointer.
+Con ellos, también el estado de la pila (STACK). De esta manera aseguramos que al volver, el proceso seguirá ejecutandose exactamente desde el mismo punto.
+Ahora es preciso decidir, a través de la política de scheduling y en particular desde el scheduler qué proceso sigue a continuación.
+Si se debe cargar un nuevo programa, en este momento lo cargamos a memoria y lo ejecutamos. Notemos que en este punto, el proceso puede ya tener almacenada información del PCB, por lo que hay que recuperarla.
+Cuando sea la hora de volver, resta recuperar la información guardada del procesador en el PCB.
+
+2)
+
+Ke_context_switch(PCB* pcb_0, PCB* pcb_1){
+    //Guardamos el contexto actual de los registros en el PCB del proceso 0
+    pcb_0->r0 = system.R0;
+    .
+    .
+    .
+    pcb_0->r15 = system.R15;
+    pcb_0->PC = system.PC;
+
+    //cargamos al contexto el estado guardado en pcb_1
+    system.R0 = pcb_1->r0;
+    .
+    .
+    .
+    system.PC = pcb_1->PC;
+
+    //actualizamos los estados de proceso.
+    pcb_0->STAT = KE_READY;
+    pcb_1->STAT = KE_RUNNING;
+
+    //seteamos el tiempo de ejecución, y reseteamos.
+    pcb_0->CPU_TIME += ke_current_user_time();
+    ke_reset_current_user_time();
+
+    //próximo proceso
+    set_current_process(pcb_1->P_ID);
+
+    //desapilamos tope de pila y seteamos PC.
+    ret();
+}
+
+3) La diferencia entre un system call y una llamada a función de biblioteca
+es que para realizar la system call ocurren a nivel kernel por lo que primero es preciso
+realizar un cambio de privilegio para ejecutarlas. Esto las hace significativamente mas lentas.
+
+4)
+
+a)  READY -> RUNNING
+    Un proceso pasa de ready a running en el contexto de un context-switch, por lo tanto es trabajo del scheduler.
+    RUNNING -> TERMINATED, 
+    Un proceso va de RUNNING a TERMINATED en el caso de que se hayan acabado las instrucciones
+    que lo componen, momento en el que el sistema lo marca como terminado.
+    Otros casos en los que un proceso puede terminar (signal, unexpected end) también son manejados por el sistema operativo.
+    NEW -> READY, 
+    Nuevamente, es el scheduler el encargado de poner a un proceso en estado ready.
+    RUNNING -> BLOCKED,
+    Cuando un proceso requiere un recurso por el que debe esperar, el scheduler determina bajo que política
+    se atenderá esta situación. 
+    BLOCKED -> READY
+
+
+
+5) a)
+
+CONSULTAR.
+void main(int argc, char* argv[], envp){
+    int pid = fork();
+    if(pid == 0){
+        //soy hijo de abraham, es decir homer.
+        int pid_1 = fork();
+        if(pid_1 == 0){
+            //soy hijo de homer, bart.
+            printf("Soy Bart");
+            exit(0);
+        }else{
+            int pid_2 = fork();
+            if(pid_2 == 0){
+                printf("Soy Lisa");
+                exit(0);
+            }else{
+                int pid_3 = fork();
+                if(pid_3 == 0){
+                    printf("Soy Maggie");
+                    exit(0);
+                }else{
+                    wait_for_child(pid_1);
+                    wait_for_child(pid_2);
+                    wait_for_child(pid_3);
+                    printf("Soy Homer");
+                    exit(0);
+                }
+            }
+        }
+    }else{
+        wait_for_child(pid);
+        printf("Soy Abraham");
+        exit(0);
+    }
+}
+
+6) 
+
+void system(const char *arg){
+    int pid = fork();
+    if(pid == 0){
+        exec(arg);
+        exit(0);
+    }
+    else
+    {
+        wait_for_child(pid);
+        exit(0);
+    }
+}
+
+8) No son iguales. Esto se debe que si bien al momento de forkear el hijo contiene una copia exacta del padre (areas texto, datos y stack)
+luego de ese momento siguen caminos separados.
+
+Por ende, cuando el hijo ejecute el código que modifica la variable dato, está modificando la copia interna de la variable.
+Por otro lado, la variable dato del padre no sufre cambios.
+
+Por ende, al final del código, el hijo contiene dato = 3 y el padre dato = 0.
+
+10) a) Las variables que deben residir en el area compartida son Tiki y Taka.
+b) Si, no es necesario que temp viva en la memoria compartida.
+main(int argc, char* argv[]){
+    int tiki = 0;
+    int taka = 0;
+
+    share_mem(&tiki);
+    share_mem(&taka);
+
+    int pid_1 = fork()
+    if(pid_1 == -1) perror("Error al forkear");
+    if(pid_1 == 0){
+        taka_runner();
+        exit(0);
+    }
+
+    int pid_2 = fork()
+    if(pid_2 == -1) perror("Error al forkear 2 proceso");
+    if(pid_2 == 0){
+        tiki_taka();
+        exit(0);
+    }
+
+    wait(NULL);
+}
+
+11) 
+a)
+int main(int argc, char* argv[]){
+
+    int value = 0;
+    int pid_padre = get_current_pid();
+    pid_t pid = fork();
+    if(pid == -1) perror("Error");
+    if(pid == 0)
+    {
+        //bucle para que el hijo no muera hasta que se le indique.
+        while(1){
+            //llamada bloqueante que recive el valor que el padre envía.
+            int new_value = breceive(pid_padre);
+            //envio al padre del valor incrementado
+            bsend(pid_padre, new_value + 1);
+        }
+    }
+    //padre manda 50 valores
+    for(int i = 0; i < 50; i++){
+        //envio el numero al hijo
+        bsend(pid, value);
+        //espero que el hijo me devuelva un valor
+        value = breceive(pid);
+        //aumento el valor
+        value++;
+        //envio mensaje nuevamente
+        bsend(pid, value);
+    }
+    //mato al hijo.
+    kill(pid, SIGTERM);
+    return 0;
+}
+
+b)
+
+int main(int argc, char* argv[]){
+
+    int value = 0;
+    //guardo el pid del padre, de manera tal que ambos hijos la reciban
+    pid_t pid_padre = get_current_pid();
+    pid_t pid = fork();
+    if(pid == -1) perror("Error");
+    if(pid == 0){
+        //primer hijo
+        while(1){
+            int new_value = breceive(pid_padre);
+            bsend(get_current_pid(), new_value++);
+        }
+    }
+    //guardo el valor del pid del 1 hijo para que el 2 la tenga
+    pid_t hijo1 = pid;
+    pid_t pid_1 = fork();
+    if(pid_1 == -1) perror("Error");
+    if(pid_1 == 0){
+        //segundo hijo
+        while(1){
+            //como el primer hijo escribe un mensaje para si mismo,
+            //lo recibo.
+            int new_value = breceive(hijo1);
+            bsend(pid_padre, new_value++);
+        }
+    }
+
+    //padre
+    for(int i = 0; i < 51; i++){
+        bsend(pid, value);
+
+        value = breceive(pid_1);
+
+        value++;
+
+        bsend(pid, value);
+    }
+    kill(pid, SIGTERM);
+    kill(pid_1, SIGTERM);
+
+    return 0;
+
+}
+
+c)
+
+int main(int argc, char* argv[]){
+    
+    int value = 0;
+    //guardo el pid del padre, de manera tal que ambos hijos la reciban
+    pid_t pid_padre = get_current_pid();
+    int hijo1Ready = 1;
+    int hijo2Ready = 0;
+    share_mem(&hijo1Ready);
+    share_mem(&hijo2Ready);
+    share_mem(&pid_padre);
+    pid_t pid = fork();
+    if(pid == -1) perror("Error");
+    if(pid == 0){
+        //primer hijo
+        while(1){
+            if(hijo1Ready && !hijo2Ready){
+                value++;
+                hijo2Ready = 1;
+                hijo1Ready = 0;
+            }
+        }
+    }
+    pid_t pid_1 = fork();
+    if(pid_1 == -1) perror("Error");
+    if(pid_1 == 0){
+        //segundo hijo
+        while(1){
+            if(hijo2Ready && !hijo1Ready){
+                value++;
+                hijo2Ready = 0
+            }
+        }
+    }
+
+    //padre
+    while(value <= 50){
+        if(!hijo1Ready && !hijo2Ready){
+            value++;
+            hijo1Ready = 1
+        }
+    }
+    kill(pid, SIGTERM);
+    kill(pid_1, SIGTERM);
+
+    return 0;
+
+}
+
+12)
+a) Esta secuencia no es posible dado a dos motivos:
+
+Por un lado el sistema implementa una cola de mensajes de capacidad cero,
+esto implica que no se pueden encolar mensajes dentro de ella y que si un proceso
+decide enviar un mensaje antes de que otro proceso este esperando recibirlo, el mensaje se perderá.
+Pero además, al ser llamadas bloqueantes el emisor del mensaje quedará bloqueado hasta que alguien lo reciba.
+
+Por ende, si se ejecuta cómputo_muy_dificil_1 antes que _2 significa que antes se envió el bsend sin que hubiera un prcoeso en brecieve.
+Ergo, el programa se bloquea.
+
+b) Podría implementarse una cola de mensajes de capacidad mayor que 0.
+
+13) a) En este caso sería mejor que se implemente memoria compartida.
+        Esto es debido a que si deben modificar el mismo archivo al mismo tiempo:
+        1) Ambos deben tener acceso al archivo en cuestión. 
+        2) Deben modificarlo al mismo tiempo, operación que desde el punto de vista
+            de mensajes es dificil de lograr debido a la sincronización.
+        Si ambos procesos tienen el archivo en una región de memoria pueden accederlo y editarlo sin problemas.
+    b) Este caso si sería resoluble con mensajes entre procesos. En el momento en el que cortarBordes termina
+    bien podría informarle al proceso eliminarOjosrojos que puede realizar su parte.
+    Si quisieramos implementarlo con memoria compartida sería dificil asegurar el orden de ejecución.
+
+    c) En este caso la única posibilidad es la comunicación con mensajes.
+        Los procesos se encuentran en sistemas distintos, por lo cual no pueden implementar memoria compartida.
+    
+
+14) 
+int main(int argc, char* argv[]){
+
+    int value = 0;
+    int pid_padre = get_current_pid();
+    pid_t pid = fork();
+    if(pid == -1) perror("Error");
+    if(pid == 0)
+    {
+        //bucle para que el hijo no muera hasta que se le indique.
+        while(1){
+            //llamada bloqueante que recive el valor que el padre envía.
+            int new_value;
+            //busy_waiting mientras que no recibamos nada
+            while(!receive(pid_padre, &new_value)){};
+            //solo salimos del ciclo anterior si pudimos recibir algo.
+            new_value++;
+            //busy_waiting mientras que no podamos escribir
+            while(!send(pid_padre, &new_value)){};
+        }
+    }
+    //padre manda 50 valores
+    for(int i = 0; i < 50; i++){
+        //envio el numero al hijo
+        //busy_waiting mientras que no podamos escribir
+        while(!send(pid, &value)){}
+        //acá ya escrbimos
+        //busy_waiiting mientras que no recibamos nada.
+        while(!receive(pid, &value));
+        value++;
+        //el mensaje se envia en la primer iteración siguiente
+    }
+    //mato al hijo.
+    kill(pid, SIGTERM);
+    return 0;
+}
+
+15) Habría muchas secuencias de ejecución de procesos que serían potencialmente necesarias pero que no se podrían
+replicar dado que la comunicación con pipes es en algunos sentidos limitada. 
+Además replicar algunos comportamientos
+de memoria compartida se harían muy complejos, al momento de dos procesos requiriendo modificar la misma 
+información deberían esperarse entre sí.
+
+Además tendríamos un sistema menos eficiente dado que por cada conexión que quisieramos hacer entre dos procesos
+si esta tuviera que ser bi-direccional deberíamos implementar 2 pipes. En el peor caso, tenemos pipes = 2 x cant.procesos.
+
+Incorporar memoria compartida nos resuelve estos dos problemas: por un lado, si dos procesos quisieran modificar
+concurrentemente un cierto set de datos que vive dentro de la memoria compartida entre ellos, no habría problemas de concurrencia.
+Por otro lado, manteniendo ciertas practicas de seguirdad podemos garantizar comunicación bi-direccional.
+
+Incorporar sockets nos daría además la propiedad de comunicar procesos a través de red.
+
+16) 
+Supongamos dos procesos conectados en red.
+Supongamos que estos dos procesos modelan un comportamiento usuario-cliente.
+Si el usuario debe realizar algún tipo de autenticación antes de ingresar al cliente
+sería lógico que esa interacción se realice a través de un canal de comunicación bloqueante. Queremos
+asegurar el orden de esa comunicación para que la autenticación tenga sentido.
+
+Pero también es probable que el usuario requiera algún recurso guardado en el cliente.
+Y si eso es así, sería bueno contar con un canal de comunicación no-bloqueante puesto que el usuario
+por ejemplo podría realizar otras tareas mientras que espera a que el cliente prepare el recurso y le avise que está disponible.
+
+17)
+
+pid shared_parent_pid;
+pid shared_child_pid;
+
+mem_share(&shared_parent_pid);
+mem_share(&shared_child_pid);
+
+shared_parent_pid = get_current_pid();
+
+pid child = fork();
+    if (child == 0) {
+        shared_child_pid = get_current_pid();
+        bsend(shared_parent_pid, "hola");
+        breceive(shared_parent_pid, ...);
+        exit(OK);
+    } else {
+        breceive(shared_child_pid, ...);
+        bsend(shared_child_pid, "chau");
+        exit(OK);
+    }
+
+el defecto de esta implementación es que no garantiza sincronía entre los procesos.
+Si por cuestiones de scheduling el proceso padre ejecutara breceive antes de que el proceso 1
+llegue a tener un quantum, estaría intentando recibir un mensaje de un parámetro que aún no está
+cargando en memoria (vale basura). 
+Por ende, quedaría bloqueado eternamente dado que nunca recibiría tal mensaje.
+
+18)
+int main(int argc, char* argv[]){
+    int pipe[2];
+    pipe(pipe);
+
+    pid_t pid = fork();
+    if(pid==-1) perror("ERROR");
+    if(pid==0){
+        close(pipe[0]);
+        dup2(pipe[1], STDOUT_FILENO);
+        execvp("ls", ["-al"]);
+        exit(0);
+    }
+
+    pid_t pid2 = fork();
+    if(pid2==-1) perror("ERROR");
+    if(pid2==0){
+        close(pipe[1]);
+        dup2(pipe[0], STDIN_FILENO);
+        execvp("wc", ["-l"]);
+        exit(0);
+    }
+
+}
+
+19) No, el comportamiento no es igual. Si no se implementa ningún mecanismo de sincronización extra 
+no puede emularse el comportamiento de las llamadas bloqueantes bsend y breceieve donde aseguramos
+que la ejecución sea secuencial (padre escribe 0, hijo lee 0 incrementa y escribe 1, padre lee e incrementa, etc).
+
+20) 
+
+void cerrarPipes(int i, int (*pipes)[8][2]){
+    for(int j = 0; j < 8; j++){
+        if(j!=i){
+            close((*pipes)[j][0]);
+            close((*pipes)[j][1]);
+        }
+        else{
+            close((*pipes)[i][0]);
+        }
+    }
+}
+
+int proceso(int i, int* lista, int (*pipes)[8][2]){
+    cerrarPipes(i, pipes);
+    int promedio = calcular_promedio(lista);
+    write((*pipes)[i][1], &promedio, sizeof(promedio));
+    exit(0);
+}
+
+
+int main(int argc, char* argv[]){
+    int pipes[8][2];
+    if(pipe(pipes)==-1){
+        perror("ERROR");
+        exit(EXIT_FAILURE);
+    }
+    int filefd = open(argv[1], O_RDONLY);
+    int count = 0;
+    int lista;
+    while(cargar_fila(filefd, &lista)){
+        if(count < CORES){
+            count++;
+            int pid = fork();
+            if(pid==-1) perror("ERROR");
+            if(pid==0){
+                proceso(count-1, &lista, &pipes);
+            }
+        }else{
+            wait(NULL);
+            count--;
+        }
+    }
+    
+    int promedios[8];
+    for(int i = 0; i < 8; i++){
+        close(pipes[i][1]);
+        read(pipes[i][0], &promedios[i], sizeof(int));
+        close(pipes[i][0]);
+    }
+    sort(promedios);
+    for (int i = 0; i < N; i++) {
+        printf("%d ", promedios[i]);
+    }
+
+    return 0;
+
+}
+
+21)
+
+int resultado;
+void hijoTermino(int sig){
+    resultado = sig - SIGUSR1;
+    write(pipes[subproceso][1], &resultado, sizeof(resultado));
+}
+ejecutarHijo(int subproceso, int pipes[][2]){
+    for(int i = 0; i < N*2; i++){
+        if(i!=subproceso){
+            close(pipes[i][0]);
+            close(pipes[i][1]);
+        }
+    }
+    int numeroSecreto;
+    read(pipes[subproceso][0], &numeroSecreto, sizeof(numeroSecreto));
+    signal(SIGUSR1, hijoTermino);
+    pid_t nieto = fork();
+    if(nieto==-1)perror("ERROR");
+    if(nieto==0){
+        int calculo = calcular(numeroSecreto);
+        kill(getppid(), SIGURG+calculo);
+    }
+    write(pipes[subproceso][1], &numeroSecreto, sizeof(numeroSecreto));
+}
+
+22)
+
+a)  clone -> fork
+    getppid -> getppid;
+    signal -> rt_sigaction
+    nanosleep -> sleep
+    printf -> write();
+    kill -> kill;
+    read -> read;

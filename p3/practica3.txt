@@ -1,0 +1,517 @@
+1)a.1) Este código tiene dos valores posibles:
+        - x sale valiendo 1: El proceso A obtuvo CPU y antes de que finalizara su quantum puede efectivamente imprimir por pantalla.
+        - x sale valiendo 2: El proceso A obtiene CPU, pero justo luego de incrementar X el scheduler se lo quita y se lo da a B.
+        Por ende, el valor de X ahora es 2, momento en el que A obtiene nuevamente el CPU e imprime por pantalla.
+        - x sale valiendo 2bis: El proceso B obtiene CPU, incrementa la variable y termina, 
+        luego el proceso A obtiene CPU, incrementa nuevamente e imprime.
+  a.2) 
+    
+    - 0 1 2 3: en caso de que A se ejecute y el scheduler no le quite el CPU para darselo a B.
+    - Intercalado: El proceso A ejecuta alguna/s iteracion/es y pierde el CPU en algún momento ANTES
+      de volver a setear Y en 0. Por ende, cuando B obtenga el CPU imprimirá a la cantidad de veces
+      que alcance su quantum. Luego, podría o bien pasar que A termina de ciclar o se vuelve a dar el caso de que pierde
+      el cpu antes de terminar pero habiendo setiado Y en 1. Por lo que habrá muchas posibles permutaciones de
+      impresiones de X con impresiones de a. Este caso incorpora que a veces A podría perder el procesador 
+      luego de haber seteado Y en 0, ese caso no molesta 
+
+2) Si bien la lectura en sí de la variable compartida se realiza de manera segura a través de un mutex
+pueden darse casos de race-condition:
+
+    Un proceso A lee X y obtiene y = 4. En ese momento, pierde el CPU.
+    Un proceso B lee X y obtiene y = 4, por lo que incrementa el valor de X.
+    Un proceso C lee X y obtiene y = 5, por lo que incrementa el valor de X.
+    Un proceso D lee x y obtiene y = 6. En este momento, pierde el CPU.
+    El control del CPU vuelve al proceso A, que internamente tenía guardado y = 4. 
+    Pero en este momento, x = 6. Como y = 4, el proceso A incrementa X.
+    Luego X = 7.
+
+    Ahora bien, supongamos que esto no sucede:
+    El proceso A lee x y obtiene y = 4. Incrementa el valor de X.
+    El proceso B lee x y obtiene y = 5. Incrementa el valor de X.
+    El proceso C lee X y obtiene y = 6. Decrementa el valor de X.
+    El proceso D lee x y obtiene y = 5. Incrementa el valor de X.
+    El proceso a vuelve a leer, y obtiene y = 6.
+
+    Esto quiere decir que los valores de X pueden modificarse mientras
+    los procesos están inactivos, guardando internamente valores inconsistentes de la variable
+    dando lugar a race-conditions.
+
+3) La propiedad EXCL no se vé afectada dado que por mas que cambie el orden en que
+   ejecutamos los procesos (FIFO -> LIFO) los mismos seguirán bloqueandose justo antes de
+   acceder a un recurso compartido y esperarán a que el recurso esté libre para accederlo.
+
+   La propiedad FAIRNESS si se verá afectada en algún sentido.
+   Supongamos que A pide por un recurso y se bloquea esperandolo:
+
+   semaphore-LIFO:
+   A
+
+   Pero antes de que se libere el recurso, llegan n procesos que piden por el mismo recurso:
+
+   A - P₁ - P₂ - ... - Pₙ
+
+   Luego, A no tendrá oportunidad de acceder al recurso hasta que los n procesos hayan terminado.
+
+   De este modo, presentamos un caso de starvation para el proceso A. 
+   Sin embargo, también es cierto que la propiedad de fairness establece que si un proceso
+   PUEDE realizar una transición en una cantidad de estados que le garantice progreso, 
+   entonces el algoritmo cumple con Fairness. 
+   Si pudieramos "gradualizar" quantitativamente la "cantidad de fairness" podríamos pensar que 
+   una implementación de semáforos sobre colas es "mas fair" que una sobre pilas.
+
+   WAIT-FREEDOM: no se ve afectada, ya que si bien A puede tener que llegar a esperar mucho por el recurso,
+   eventualmente lo logra (luego de que todos los procesos que llegaron después se ejecuten).
+
+4)  
+
+wait():
+    while(s<=0){
+        sleep();
+    }
+    s--;
+
+signal():
+    s++;
+    if(s.hasWaiting())
+        wakeup(any);
+
+Supongamos que no hay ejecución atómica de estas rutinas del semáforo.
+
+Entonces podría pasar lo siguiente:
+shared_file;
+mutex(1);
+//Proceso A
+while(1){
+    non_crit_section();
+    mutex.wait();
+    //CRIT
+    modify(shared_file);
+    mutex.signal();
+}
+
+//Proceso B{
+    mutex.wait();
+    //CRIT
+    modify(shared_file);
+    mutex.signal();
+}
+
+Supongamos también que, el scheduler primero le da el CPU al proceso A.
+El proceso A corre primero una rutina que no es critica, y luego llega al wait del mutex.
+
+Internamente, el proceso A verifica el while, como s = 1 el proceso no se va a dormir, a continuación
+debería restar en uno el semáforo. Pero justo antes de que esto suceda, el scheduler le quita el CPU
+y se lo da al proceso B. Luego, el proceso B también ejecuta wait y termina, por lo que decrementó en uno
+el semáforo e ingrsó en su sección crítica. En algún momento dentro de la sección crítica, el scheduler
+desaloja a B y le da el CPU al proceso A. Retorna desde la rutina wait -justo después del while-, decrementa el semáforo
+e ingresa en la sección crítica.
+
+En este punto tenemos que tanto A como B están al mismo tiempo dentro de la sección crítica, por ende
+la propiedad EXCL ha sido violada.
+
+5) Este código proporcionado rompe la propiedad WAIT-FREEDOM por lo siguiente:
+
+Los procesos incrementan la variable count de manera segura,
+luego salvo que sean el último proceso se quedan todos trabados en barrera.wait().
+
+El último de ellos, ejecuta UN signal, y despierta UN proceso.
+
+Pero el resto n-1 procesos sigue bloqueado, y seguirá indefinidamente.
+Esto implica que, (∃i)□ ¬IN(i).
+
+Luego, no se cumple wait-freedom.
+
+Una modificación posible es la siguiente:
+
+preparado();
+mutex.wait();
+count = count + 1;
+mutex.signal();
+
+if(count == n)
+    barrera.signal();
+barrera.wait();
+barrera.signal(); ← de este modo, cuando un proceso se despierte, hará el signal para el siguiente.
+                    esto ocurrirá en cadena hasta que todos se hayan despertado.
+
+critica();
+
+6)
+
+*********************************
+*          CONSULTAR            *
+********************************* 
+atomic<int> count = 0;
+TASLock mtx;
+
+preparado();
+
+if(count.getAndInc() == N-1){
+    mtx.unlock;
+}
+mtx.lock();
+critica();
+
+a) La legibilidad favorece al uso de estructuras atómicas.
+El código con semáforos es un poco mas engorroso dado que requiere de la "desencadenación"
+de los signals para que todos los procesos efectivamente reciban el permiso de pasar la barrera.
+
+La implementación con el lock es mucho mas clara, todos los procesos quedan esperando
+a que el spinlock se libere, una vez que el último corrío preparado() lo libera y todos pueden continuar.
+
+b) Sin embargo, con respecto a la eficiencia, la implementación mediante objetos atómicos es mucho mas costosa.
+Esto se debe a que a diferencia de los semáforos en los que cuando los procesos no peuden correr se bloquean,
+con objetos atómicos quedan haciendo busy-waiting, gastando ciclos de reloj mientras que no pueden hacer nada.
+Esto implica un consumo innecesario de ciclos de reloj que podría evitarse. Hay alternativas atómicas
+como utilizara un TTASLOCK (local-spinning) que testea si puede testandsetear minimizando la cantidad de veces que se setean valores
+pero igual es ineficiente comparado con los semáforos.
+
+c) Ambas necesitan soporte en HW, pues si bien los semáforos en sí podrían ser implementados
+en software siempre necesitarán utilizar alguna primitiva de sincronización atómica que les garantice
+que el manejo interno del semáforo no puede ser interrumpido una vez que ha empezado.
+Vimos anteriormente que de ser así, no hemos resuelto el problema de las race-condition.
+En este caso el software es necesario pues el proceso que se bloquea mediante un semáforo debe
+ser desalojado y se le debe dar el CPU a otro proceso que si pueda correr en este momento.
+
+Por otro lado, la implementación con objetos atómicos no precisa de ningún soporte del SO.
+Es pura implementación en HW, pues cuando un proceso "no puede correr" igual queda corriendo,
+solo que gastando los ciclos del CPU en un while que no hace nada (quizás, testear el spinlock).
+
+7)
+sem[n+1]
+void init(){
+    for(k=0; k <= n; k++)
+        sem[i] = 0;
+    sem[i].signal();
+}
+
+void P(i, j){
+    
+    sem.wait(j);
+    if(j == i)
+        sem[i+1%n].signal();
+
+}
+
+8) 
+8.1)
+semA = sem(1);
+semB = sem(0);
+semC = sem(0);
+void A(){
+
+    while(1){
+        semA.wait(); <- la primera vez, A entra sin problemas dado que el semaforo está en 1.
+        crit();
+        semB.signal();<-despertamos a B. 
+    }
+
+}
+
+void B(){
+    while(1){
+        semB.wait();<-hasta que A no haga signal no entra, el semáforo está en 0.
+        crit();
+        semC.signal();<-despertamos a C.
+    }
+}
+
+void C(){
+    while(1){
+        semC.wait(); <- hasta que B no haga el signal, no entra.
+        crit();
+        semA.signal(); <- permitimos que A re-entre.
+    }
+
+}
+Si consideramos que A la primer vez entra en la sección crítica sin problemas,
+que luego A despierta a B y le permite ingresar en su sección crítica,
+B despierta a C y le permite ingresar en su sección crítica,
+C a su vez vuelve a levantar el permiso para que A re-ingrese a su sección
+crítica y la cadena se desarrolle denuevo, entonces podemos decir que
+el esquema es LOCK-FREEDOM (todo proceso que intenta entrar en la sección crítica
+lo logra en algún momento futuro.)
+
+
+8.2) 
+
+
+*********************************
+*          CONSULTAR            *
+*********************************
+semB = sem(2);
+semA = sem(0);
+semC = sem(0);
+atomic<int> count = 0;
+void B(){
+    while(1){
+        semB.wait();
+        int aux = count.getAndInc()
+        if(aux == 2){
+            count.getAndAdd(-2);
+            semC.signal();
+        }else if(aux == 0)
+            semB.signal();
+    }
+}
+
+void C(){
+    while(1){
+        semC.wait();
+        crit();
+        semA.signal();
+    }
+}
+
+void A(){
+    while(1){
+        semA.wait();
+        crit();
+        semB.signal()
+    }
+}
+
+8.3)
+
+int lecturas = 2;
+int mutex = sem(1);
+int barrera = sem(0);
+proc A(){
+    while(1){
+        mutex.wait();
+        if(lecturas == 2){
+            lecturas = 0;
+            producir();
+            barrera.signal();
+        }
+        mutex.signal();
+    }
+}
+
+proc B(){
+    while(1){
+        if(lecturas < 2){
+            retirar();
+            mutex.wait();
+            lecturas++;
+            mutex.signal();
+        }else{
+            barrera.wait();
+            barrera.signal();
+        }
+    }
+}
+
+proc C(){
+    while(1){
+        if(lecturas < 2){
+            retirar();
+            mutex.wait();
+            lecturas++;
+            mutex.signal();
+        }{
+            barrera.wait();
+            barrera.signal();
+        }
+    }
+}
+
+Este esquema es lock-freedom. A escribe sin problemas siempre que pueda (se han hecho 2 lecturas).
+B y C esperan a que haya elementos producidos (es decir, lecturas < 2),
+alternadamente se dan permiso entre ellos o bien para que el otro lea (entra a la sección crítica levantando la barrera)
+o bien para que uno solo ejecute dos veces la lectura.
+
+
+8.4)
+
+
+*********************************
+*          CONSULTAR            *
+*********************************
+
+int lecturas = 2;
+int mutex = sem(1);
+int barrera[2] = {sem(0), sem(0)} 
+proc A(){
+    while(1){
+        mutex.wait();
+        if(lecturas == 2){
+            lecturas = 0;
+            producir();
+            count++;
+        }
+        mutex.signal();
+        barrera[count%2].signal();
+    }
+}
+
+proc B(){
+    while(1){
+        barrera[1].wait();
+        mutex.wait();
+        if(lecturas < 2){
+            retirar();
+            lecturas++;
+        }
+        mutex.signal();
+        barrera[1].signal();
+    }
+}
+
+proc C(){
+    while(1){
+        barrera[0].wait();
+        mutex.wait();        
+        if(lecturas < 2){
+            retirar();
+            retirar();
+            lecturas = 2;
+        }
+        mutex.signal();
+        barrera[0].signal();
+    }
+}
+
+9) Esto es un caso típico de rendezvouz. Puede solucionarse implementando una barrera:
+atomic<int> cant = 0;
+semaphore barrera = 0;
+proc P(i){
+
+    a(i);
+    if(cant.getAndInc() == N-1)
+        barrera.signal();
+    barrera.wait(); <- esperan hasta que el último haya ejecutado a(i).
+    barrera.signal(); <- el primero que logra pasar (osea el último que ejecuta a(i)) 
+                        despeirta al próximo, y luego este al próximo, etc.
+    b(i); <- ejecutan b(i)
+
+}
+
+10)
+
+Si, pueden bloquearse:
+
+foo() corre semWait(S) <- S ahora vale 0. Pierde el CPU
+bar() corre semWait(R) <- R ahora vale 0. Pierde el CPU.
+foo() vuelve y queda esperando por R que vale 0. En algún momento, pierde el CPU.
+bar() vuelve y queda esperando por S, que vale 0. En algún momento, pierce el CPU.
+A partir de ahora, ambos procesos quedan esperando por semáforos que no reciben signals nunca más.
+
+No, no generan starvation.
+
+
+11) a) 
+
+*********************************
+*          CONSULTAR            *
+*********************************
+count = int
+    luz = atomic<bool>
+    libres= atomic<bool>
+
+Para garantizar EXCL: se define una variable compartida atomic<bool> ocupada, que empezará en falso.
+
+Cada vez que un prisionero ingrese a la sala, la variable en cuestión se setea atómicamente
+en true, justo antes de salir la vuelve a setear en falso.
+
+De esta manera, antes de entrar cada prisionero debe chequear el estado de la variable.
+
+c) Garantizar FAIRNESS es importante ya que de ese modo todos los prisioneros
+tienen la oportunidad de hacer su parte para liberar a todos.
+
+13)
+
+int mesas[N];
+int clientes[N*4];
+atomic<queue> mesasQ;
+mutex = sem(1);
+proc Bar(){
+    for(int i = 0; i < N; i++){
+        mesasQ.enqueue(i);
+    }
+    int cliente = 0;
+    while(1){
+        spawn Cliente(cliente);
+        cliente++;
+    }
+}
+
+proc Cliente(int cliente){
+    int mesa;
+    bool = success;
+    do{
+        success = mesasQ.dequeue(&mesa);
+    }while(success && mesas[mesa]==4);
+    mutex.wait();
+    mesas[mesa]++;
+    if(mesas[mesa] < 4)
+        mesasQ.enqueue(mesa);
+    mutex.signal();
+    do(
+        jugar();
+    )while(jugando);
+    mutex.wait();
+    mesas[mesa] = 0;
+    mesasQ.enqueue(mesa);
+    mutex.signal();
+}
+
+14) 
+
+int cantOxigenos = 0;
+int cantHidrogenos = 0;
+semaphore barreraH = 0;
+semaphore barreraO = 0;
+sempahore mutex = 1;
+
+Oxigeno(){
+    while(1){
+        mutex.wait();
+        if(cantOxigenos < 1) cantOxigenos++;
+        mutex.signal();
+
+        barreraO.wait();
+        mutex.wait();
+        if(cantHidrogenos == 2){
+            unir();
+            cantOxigenos = 0;
+            cantHidrogenos = 0;
+            barreraH.signal();
+        }
+        mutex.signal();
+
+    }
+}
+
+Hidrogeno(){
+    while(1){
+        mutex.wait();
+        cantHidrogenos++;
+        mutex.signal();
+        if(cantHidrogenos == 2){
+            barreraO.signal();
+            barreraH.wait();
+        }
+        
+    }
+}
+
+15)
+
+semaphore mutex = 1;
+int esperando = 0;
+bool lleno = false;
+semaphore sofa[4] = {1,1,1,1}
+
+proc Cliente(i){
+    if(lleno)
+        return;
+    mutex.wait();
+    esperando++;
+    if(esperando == 20)
+        lleno = true;
+    mutex.signal();
+
+    
+
+}
