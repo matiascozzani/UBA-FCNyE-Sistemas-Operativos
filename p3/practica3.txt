@@ -421,6 +421,10 @@ tienen la oportunidad de hacer su parte para liberar a todos.
 
 13)
 
+*********************************
+*          CONSULTAR            *
+*********************************
+
 int mesas[N];
 int clientes[N*4];
 atomic<queue> mesasQ;
@@ -457,6 +461,11 @@ proc Cliente(int cliente){
 }
 
 14) 
+
+
+*********************************
+*          CONSULTAR            *
+*********************************
 
 int cantOxigenos = 0;
 int cantHidrogenos = 0;
@@ -498,6 +507,10 @@ Hidrogeno(){
 
 15)
 
+*********************************
+*          CONSULTAR            *
+*********************************
+
 semaphore mutex = 1;
 int esperando = 0;
 bool lleno = false;
@@ -508,7 +521,7 @@ semaphore pagar = 1;
 
 proc Cliente(i){
     if(lleno) <- si el local está lleno, me voy.
-        return;
+        exit;
     mutex.wait();
     if(esperando < 3)
         barbero.signal(); <- si había menos de 3 esperando, cada cliente que entra debe despertar a un barbero.
@@ -550,8 +563,243 @@ proc Barbero(i){
         clientes[proximoCliente].wait(); <- espera a que el cliente se haya sentado.
 
         cortarCabello(proximoCliente); <- le corta el cabello.
-        clientes[i].signal(); <- le avisa que ya terminó de cortarle
-        clientes[i].wait(); <- espera a que el cliente pague.
+        clientes[proximoCliente].signal(); <- le avisa que ya terminó de cortarle
+        clientes[proximoCliente].wait(); <- espera a que el cliente pague.
         aceptarPago(proximoCliente); <- acepta el pago del cliente.
     }
+}
+
+16)
+
+17) 
+
+*********************************
+*          CONSULTAR            *
+*********************************
+
+semaphore mutex = 1;
+semaphore cocinero = 0;
+semaphore nuevaPorcion = 0;
+int porciones = M;
+
+antropofago(){
+
+    while(true){
+        mutex.wait();
+        if(porciones == 0){
+            mutex.signal();
+            cocinero.signal(); <- tengo mis dudas con como respondería esto. No hay eventual deadlock?
+            nuevaPorcion.wait(); 
+        }else{
+            mutex.signal();
+            tomar_porcion();
+        
+            mutex.wait();
+            porciones--;
+            mutex.signal();
+
+            comer();
+        }
+       
+    }
+
+}
+
+cocinero(){
+    while(true){
+        cocinero.wait();
+        cocinar_porcion();
+        mutex.wait();
+        porciones++;
+        mutex.signal();
+        nuevaPorcion.signal();
+    }
+    
+}
+
+18)
+
+*********************************
+*          CONSULTAR            *
+*********************************
+enum = {botellas, porrones}
+semaphore heladeras[N];
+atomic<queue> heladerasDisponibles;
+int capacidadHeladeras[N][2] = {[15, 10], [15,10]...,[15,10]};
+semaphore mutex = 1;
+proc Heladera(i){
+    EnchufarHeladera();
+    AbrirHeladera();
+    /* estructura atómica, hace falta encerrarla en un mutex?/*
+    heladerasDisponibles.queue(i); <-encolamos la heladera para que pueda ser llenada.
+    heladeras[i].wait(); <-la heladera espera a ser llenada.
+    CerraHeladera();
+    EnfriadoRapido();
+}
+
+proc Cerveza(i, tipoEnvase){
+    LlegarABar();
+    int heladeraDisponible;
+    mutex.wait();
+    heladerasDisponibles.dequeue(&heladeraDisponible);
+    if(tipoEnvase == botella){
+        capacidadHeladeras[heladeraDisponible][botellas]--;
+    }else{
+        capacidadHeladeras[heladeraDisponible][porrones]--;
+    }
+    MeMetenEnHeladera(heladeraDisponible);
+    if(capacidadHeladeras[heladeraDisponible][botellas] == 0 &&
+        capacidadHeladeras[heladeraDisponible][porrones] == 0)
+        heladeras[heladeraDisponible].signal(); <- la heladera se llenó
+    else
+        heladerasDisponibles.enqueue(heladeraDisponible);
+    mutex.signal();
+    exit();
+}
+
+19)
+int capacidadLavarropas = 0;
+semaphore barrera = 0;
+semaphore lavarropas = 0;
+semaphore mutex = 1;
+semaphore prenda = 0;
+proc Lavarropas(){
+    while(1){
+        estoyListo();
+        for(int i = 0; i < 10; i++)
+            barrera.signal();
+
+        lavarropas.wait();
+        lavar();
+        puedenDescargarme();
+        for(int i = 0; i < 10; i++)
+            prenda.signal();
+
+        lavarropas.wait();
+    }
+}
+
+proc P(i){
+    barrera.wait();
+
+    mutex.wait();
+    entroAlLavaropas();
+    capacidadLavarropas++;
+    if(capacidadLavarropas == 10) lavarropas.signal();
+    mutex.signal();
+
+    prenda.wait();
+
+    saquenmeDeAqui();
+    capacidadLavarropas--;
+    
+    if(capacidadLavarropas == 0) lavarropas.signal();
+}
+20)
+atomic<queue> filas[N];
+int esperandoBajar = 0;
+int esperandoSubir = 0;
+semaphore esperoColectivo = 0;
+semaphore esperarPuerta = 0;
+semaphore mutex = 1;
+proc Pasajero(int parada, int i){
+
+    filas[parada].queue(i);
+    mutex.wait();
+    esperandoSubir++;
+    mutex.signal();
+    esperoColectivo.wait();
+
+    mutex.wait();
+    int colectivo = indicarDestino();
+    esperoTarifa.wait();
+    pagarConSube();
+    mutex.signal();
+
+    viajar();
+
+    dirigirseAPuertaTrasera();
+    mutex.wait();
+    esperandoBajar++;
+    mutex.signal();
+    esperarPuerta.wait();
+    mutex.wait();
+    bajar();
+    mutex.signal();
+
+}
+
+proc Colectivero(int capacidad, int identificador){
+    for(int i = 0; i < N; i++){
+        detener();
+        bool puedeAvanzar = false;
+        abrirPuertaTrasera();
+        abrirPuertaDelantera();
+        int pasajerosSubidos = 0;
+        do{
+            mutex.wait();
+            bool puedenSubir = esperandoSubir > 0 && pasajerosSubidos <= capacidad;
+            bool puedenBajar = esperandoBajar > 0;
+            mutex.signal();
+
+            if(puedenSubir){
+                int pasajero;
+                filas[i].dequeue(&pasajero);
+                mutex.wait();
+                esperoColectivo.signal();
+                pasajerosSubidos++;
+                esperoTarifa.signal();
+                mutex.signal();
+            }
+            if(puedenBajar){
+                esperarPuerta.signal();
+                esperandoBajar--;
+            }
+            puedeAvanzar = puedenSubir || puedenBajar;
+        }while(!puedeAvanzar)     
+
+        avanzar();
+    }
+}
+
+21)
+semaphore max_inserters = 1;
+semaphore mutex = 1;
+semaphore stop = 1;
+int searchersWorking = 0;
+proc Searcher(){
+    stop.wait();
+
+    mutex.wait();
+    searchersWorking++;
+    mutex.signal();
+    examinarLista();
+    mutex.wait();
+    searchersWorking--;
+    mutex.signal();
+
+    stop.signal();
+}
+
+proc Inserter(){
+
+    max_inserters.wait();
+    insertar_en_lista();
+    max_inserters.singal();
+
+}
+
+proc Deleters(){
+    bool canDelete = false;
+    max_inserters.wait();
+    do{
+        mutex.wait();
+        if(searchersWorking == 0){
+            stop.wait();
+            canDelete = true;
+        }
+        mutex.signal();
+    }while(!canDelete)
+    delete();
+    stop.signal();
 }
