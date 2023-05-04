@@ -1,0 +1,132 @@
+1)
+Las direcciones de memoria lógicas -o virtuales- son direcciones que viven dentro del
+espacio de memoria que conoce el proceso en cuestión. Estas direcciones no son exactamente
+direcciones de espacios físicos en la memoria -he ahí la diferencia- si no que son direcciones
+que referencian entradas dentro de una tabla de páginas administrada por la MMU. Estas entradas
+si contienen la información necesaria para hacer referencia a la memoria física (en caso de
+páginas multinivel, las entradas referencian a su vez otras entradas que referencian la física,
+pero en escencia es lo mismo). Este esquema, comunmente conocido como paginación permite que
+el espacio de direcciones virtuales que le damos a los procesos exceda la cantidad de direcciones
+físicas de las que disponemos, permitiendonos utilizar "mas memoria" de la que en realidad hay.
+
+Esto ocurre debido a que de este modo podemos almacenar parte de la memoria que necesita un proceso
+en disco, por ejemplo, y en caso de que este la necesite y la pida explícitamente -pero no se 
+encuentre cargada dentro del esquema de paginación actual- se genera un page fault que es atentido
+por el SO, el mismo carga la memoria faltante a algún marco de página (direcciones físicas) y le avisa
+al proceso cuando está listo para que este se desbloquee y utilice la información que solicitó.
+
+Además, brinda seguridad, pues ningún proceso puede acceder a páginas que no esten dentro de su esquema
+de paginación, por ende, direcciones físicas a los que no podría acceder no están referenciadas internamente
+en su espacio de direcciones virtuales.
+
+Estas páginas pueden además contener información con respecto a la utilización de las mismas
+-si se han accedido últimamente, si se han modificado últimamente, entre otras- para optimizar
+el overhead asociado con invocar al kernel para resolver los page fault, elevando la performance del esquema.
+
+2)
+La fragmentación interna ocurre cuando un algoritmo de manejo de memoria deja libres
+muchos espacios intra-bloque en la memoria. Por lo tanto, dentro de los propios bloques
+de memoria quedan espacios libres que no son utilizados. Esto genera un cierto desaprovechamiento
+de la memoria. Hay algoritmos que favorecen más este tipo de fragmentación, y otros que no.
+En definitiva, los algoritmos producen este tipo de fragmentación cuando los bloques de memoria 
+entregados son más grandes de lo necesario, quedando espacio libre en el medio.
+
+La fragmentación externa ocurre cuando quedan muchos bloques libres -enteros- pero pequeños
+y dispersos. Este caso se da cuando algoritmos de asignación otorgan bloques dispersos que no son
+lo suficientemente grandes como para satisfacer las solicitudes de los procesos.
+
+
+4) Los tamaños de las páginas son potencias de dos debido a que
+en definitiva las páginas son un medio para direccionar memoria.
+
+A fin de cuentas, no son mas que bits prendidos o apagados que nos indican distintas
+posiciones donde pueden encontrarse los marcos de página. Por ello, según la cantidad de memoria
+que necesitemos direccionar estableceremos la cantidad de bits necesario para hacerlo de la siguiente manera:
+
+2ˣ = Y
+
+donde Y es la cantidad de memoria a direccionar y x es la potencia de 2 que nos permite hacerlo.
+
+5)
+
+a) Instalar un CPU mas rápido no otorgará mejor utilización del mismo. Claro que todas las operaciones
+    se realizarán mas rápido, pero en un sistema que exhibe thrashing el camino para mejorar
+    el aprovechamiento del CPU es incrementar la cantidad de memoria disponible.
+b) Como se mencionó anteriormente, esta sería una buena decisión. Aumentando la cantidad
+    de paginación disponible podremos direccionar más memoria y por ende perderemos menos tiempo
+    gastando CPU realizando los swaps de memoria.
+c) Incrementar el grado de multiprogramación no solo no mejorará la utilización de CPU en este caso,
+    si no que puede llegar a decrementarlo, si tenemos mas switch de procesos que necesitan acceder
+    a memoria, es posible que debamos hacer swaps de paginación más seguido, incrementando el thrashing.
+d) Disminuir el grado de multiprogramación puede ser de ayuda en este caso, menos context-switch
+    implicaría (en principio) menos swaps de paginación.
+e) Instalar mas memoria principal también ayudaría mucho por lo mencionado en el punto b.
+f) Instalar un disco más rapido puede ayudar levemente, la operación de escritura de memoria
+    a disco al momento de realizar un swap de paginación puede llevarse acabo más rápidamente, por lo que
+    disminuiríamos un poco el overhead del swap.
+g) Si realizamos prepaging -qué implica cargar páginas que el proceso no ha solicitado explícitamente,
+    pero que es probable que necesite luego- puede optimizar el uso del cpu debido a que potencialmente
+    estamos disminuyendo la cantidad de swaps de memoria a disco que necesita hacer el SO.
+h) Incrementar los tamaños de las páginas también sería bueno, como hemos mencionado anteriormente,
+    mas paginación implica menos thrashing y un mejor aprovechamiento del CPU.
+i) Como este sistema no exhibe grandes cantidades de utilización de E/S, y si bien es cierto
+    que incrementar la velocidad del bus podría decrementar ligeralmente el overhead asociado con
+    los swaps de paginación, no tendría una implicancia relevante en el uso del CPU.
+
+6)
+8 páginas.
+1024 palabras c/u.
+32 frames de capacidad.
+
+Para direccionar 8 páginas son necesarios 3 bits.
+Eso nos permite determinar el "inicio" de cada página. Pero dentro del esquema de direcciones lógicas,
+también es necesario direccionar las entradas intermedias entre cada página.
+
+Como cada página mide 1024 palabras, debemos poder direccionarlas.
+
+Por ende, para cáda página necesitamos 10 bits.
+
+Luego, necesitamos 3 bits para las páginas, 10bits para las entradas de cada una, 13 bits en total.
+
+b) Suponiendo que los frames de paginación tienen exactamente la misma cantidad de palabras;
+neceistamos 5 bits para direccionar los 32 frames, y 10 bits para las entradas de cada uno.
+
+15 bits total.
+
+7) Si, el programa se puede ejecutar en el susodicho espacio de direccionamiento debido a que
+hay mas espacio disponible de el que el programa necesita.
+
+El tamaño de las páginas no altera el hecho de que el programa pueda seguir corriendo, a lo sumo
+serán necesarias más páginas.
+
+8)
+
+a) El acceso a memoria paginada tardaría 400ms dado que para poder acceder a memoria paginada
+en este esquema es necesario realizar dos accesos a memoria: uno para referenciar la tabla de paginas del proceso,
+y otra para acceder a la dirección física.
+
+b) 
+
+Tiempo Medio = (TIEMPO_TLB_HIT * CHANCES_TLB_HIT) + (TIEMPO_MEM*CHANCES_MEM)
+Tiempo medio = (0 * 0.75) + (200 * 0.25) = 50ns.
+
+9)
+
+Se produce un page-fault cuando un proceso intenta referenciar un marco de página que no está
+cargado en memoria.
+En este caso, se genera un fault que es atrapado por el SO que inmediatamente releva el control
+al kernel. El kernel bloquea al proceso en cuestión, y realiza un context switch
+guardando en el IP la dirección exacta de la instrucción que causó la interrupción.
+
+A continuación, se determina qué página en particular debe ser recuperada y que dirección
+virtual le corresponde. Luego, se busca o bien un marco de página libre o bien se desaloja
+algún marco usado -basado en algunos criterios definidos en el diseño del SO-. Se recupera
+de disco a memoria la información solicitada y devuelve el control al proceso que, proximamente,
+vuelve a ejecutar la instrucción que antes había fallado.
+
+11)
+a) FIFO desalojará la página número 3.
+b) LRU desalojará la página número 2.
+c) second chance desalojará la página 2.
+
+12) 

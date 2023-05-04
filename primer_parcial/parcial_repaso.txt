@@ -1,0 +1,133 @@
+1)
+void sigtermHandler(int code){
+    ganador = true;
+}
+bool ganador = false;
+int main(int argc, char* argv[]){
+    
+    int hijos = 10;
+    int pipes[10][2];
+    for(int i = 0; i < hijos; i++){
+        if(pipe(pipes[i]) == -1) perror("ERROR AL CREAR PIPE");
+    }
+
+    int pid_hijos[10];
+
+    for(int i = 0; i < hijos; i++){
+        pid_hijos[i] = fork();
+        if(pid_hijos[i]==-1) perror("ERROR AL FORKEAR");
+        if(pid_hijos[i] == 0){
+            signal(SIGTERM, sigtermHandler);
+            for(int j = 0; j < hijos; j++){
+                if(j == i) continue; <- cierro todos los pipes menos el mío.
+                close(pipes[j][0]); <- cierro todos los pipes menos el mío.
+                close(pipes[j][1]); <- cierro todos los pipes menos el mío.
+            }
+            close(pipes[i][0]); <- cierro lectura del hijo, pues no la necesito.
+            while(!ganador){
+                int randomH = 0;
+                do{
+                    randomH = get_random_number();
+                }while(randomH < 0 || randomH >= 100); <- genero numero random entre 0 y 99.
+
+                write(pipes[i][1], &randomH, sizeof(randomH));
+                sleep(1);
+            }
+            printf("Gané %d", i);
+        }
+    }
+
+    for(int i = 0; i < hijos; i++){
+        close(pipes[i][1]); <- cierro todas las escrituras. el padre solo necesita leer.
+    }
+    int random = 0;
+    do{
+        random = get_random_number();
+    }while(random <= 0 || random >= 50);
+    int numeros[hijos];
+    int contador = 0;
+    int hijosJugando = hijos;
+    bool ningunoGano = false;
+    int ganador = 0;
+    do{
+        read(pipes[contador], &(numeros[contador]), sizeof(int));
+
+        if(numeros[contador] > random){
+            kill(pid_hijos[contador], SIGKILL);
+            hijosJugando--;
+        }
+        ningunoGano = hijosJugando > 1;
+        if(!ningunoGano)
+            ganador = contador;
+        else
+            contador = (contador + 1)%hijosJugando;
+    }while(ningunoGano)
+
+    close(pipes[ganador][0]);
+    kill(pid_hijos[ganador], SIGTERM);
+
+}
+
+2) Para este sistema se podría implementar un scheduler de colas multinivel.
+
+La primer cola, de mayor prioridad, es la que almacenará todos los procesos relacionados
+con las alarmas, que a su vez se administrarán con una política EDF a fin de garantizar
+que toda alarma será procesada lo más "rapido" posible.
+
+Una segunda cola de menor prioridad que se encargará de almacenar todos los procesos que se relacionen
+con el video, que podría implementar un esquema Round-Robin para garantizar fairness entre los procesos.
+
+Una última cola, FIFO también que implementará los procesos batch de compresión que correrán durante la noche.
+
+No es necesario implementar ningún mecanismo de aging.
+
+Mientras tanto, en la segunda cola, tenemos los procesos de distitnas áreas corriendo de manera
+fair con un algoritmo que nos asegura que cada proceso obtendrá el CPU de manera regular.
+
+
+3)
+semaphore mutex = 1;
+semaphore pista = 0;
+atomic<queue> turnos;
+int avionesEnVuelo = N;
+semaphore aviones[N] = {0,0..,0}
+semaphore barrera = 0;
+
+proc Avion(i){
+
+    mutex.wait(); <- pido el mutex, aseguro el orden correcto
+    pedir_pista(); <- pido la pista
+    turnos.queue(i); <- me encolo para que se respete mi turno
+    if(i == N) pista.signal(); <- todos pidieron pista
+    mutex.signal(); <- libero el mutex
+    if(i != turnos[0])
+        aviones[i].wait(); <- si no soy el primero, entonces espero a que me den permiso
+    else
+        pista.wait(); <- si soy el primero, espero a que todos pidan pista para asegurarme
+                         que no pierdo señales
+
+    //tengo lugar
+    aterrizar();
+    aterrize_bien();
+    mutex.wait();
+    avionesEnVuelo--; <- decremento los aviones volando
+    int aux;
+    turnos.dequeue(aux); <- me desencolo de la cola
+    if(avionesEnVuelo > 0){ <- si todavía hay aviones por aterrizar
+        int proximo;
+        turnos.dequeue(proximo); <- desencolo al próximo
+        aviones[proximo].signal(); <- envio la señal al próximo
+        mutex.signal(); <- libero mutex.
+    }
+    else{ <- si no hay mas aviones por aterrizar, soy el último,libero la barrera
+        barrera.signal();
+        mutex.signal();
+    }
+
+    barrera.wait(); <- esperamos a que todos hayan aterrizado
+    barrera.signal(); <- libero al proximo
+
+    asadear();
+    despegar();
+}
+

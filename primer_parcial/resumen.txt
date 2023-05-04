@@ -1,0 +1,108 @@
+IPC:
+
+• Siempre comprobar que pipes y fork no retornen código de error (-1).
+• dup2(oldfd, newfd) nos copia el oldfd sobre al newfd, de manera que
+efectuar una operación sobre newfd es identico a aplicarla sobre oldfd.
+(POR EJEMPLO, DE UN PIPE A UN STDOUT/IN_FILENO).
+• Cerrar los pipes que no vayan a ser usados.
+• Importante: cuando sea necesario triggerear fin de comunicación,
+hay que cerrar el pipe específico que lo permite.
+• Cuando haya algún comportamiento que dependa de la ejecución de un handler de una señal,
+recordar que no es necesario que sea EL handler que ejecute ese comportamiento.
+Puede utilizarse ese handler como un puente que dispare cierto comportamiento en el proceso.
+(Recordar ganador = true en el caso del ejercicio de repaso).
+• Bidireccional → 2 pipes.
+• cuando se intenta leer de un pipe vacío el proceso se bloquea hasta que se escriba algo
+• cuando se intenta escribir en un pipe vacío, se bloquea hasta que lean algo del pipe.
+• SIGCHLD se envía al padre cuando un hijo termina.
+• Acordarse el caso del taller: en el caso de la comunicación en anillos, una vez que el padre escribía
+en el hijo el primer valor, cerraba ese pipe porque ya no lo iba a usar mas. Es decir,
+hay que cerrar todos los pipes o bien que no se usan, o bien luego de que se usen los que ya no se van a usar.
+• read y write devuelven cantidad de bytes leidos y escritos. -1 en caso de error.
+
+Scheduling:
+Qué optimizar:
+Throughput: nro de procesos terminados x unidad de tiempo. maximizar
+Turnaround: tiempo desde que entró hasta que terminó. minimizar
+Waitint time: tiempo que pasa en estado READY. minmizar
+intensivo E/S: rafagas CPU cortitas.
+intesivo CPU: rafagas CPU largas
+
+Enfoques:
+Procesos E/S suelen tener alta prioridad.
+Procesos real-time: mayor prioridad de todas.
+Interactivos luego
+batch último.
+
+A mayor uso de cpu, menor prioridad. Si un proceso de repente usa mucha CPU, se lo envejeze.
+Si no, se lo rejuvenece. Tambien puede usarse aging para reducir starvation.
+
+• FCFS: FIFO, primero que entra, primero que se va. Asume que los procesos son iguales. Llega un MEGAPROCESO que requiere CPU, tapon a los demás.
+    Suelen utilizarse en esqeumas donde la carga de trabajo es baja y los procesos tienen duración similar.
+• Round-Robin: Gran numero de procesos y carga variada. Garantiza fairness. Sistemas interactivos, tiempo real.
+    Puede combinarse con multiples colas con distintos quantums. Cuando un proceso no le alcanza el CPU, pasa a la cola siguiente
+    de menor prioridad pero con mas CPU asignado. Proc. interactivos van a la máxima prioridad (E/S). Cuando un proceso termina de hacer E/S va a parar a la de máxima prioridad.
+• SJF: Maximizar Throughput. No es recomendado para procesos interactivos, pero si para maximizar trabajos terminados x hora.
+    Es recomendable para procesos de duracion predecible y donde se debe minimizar el tiempo de espera promedio.
+
+• EDF: earliest-deadline first. recomendado para tiempo real. procesos críticos cumplen deadlines. puede ser costoso reordenar la cola de procesos cuando los deadlines van cambiando.
+
+• SRTF: versión preemptive de SJF. recomendable si duarciones impredecibles de procesos y variantes.
+    puede generar inancion sobre procesos largos.
+
+SINCRONIZACIÓN:
+TestAndSet: pone 1 y devuelve el valor anterior atómicamente. busy waiting.
+TASLOCK: en base a testanset. spin-lock. hace busy waiting.
+TTASLOCK: en base a TASLOCK. testea antes de testandtestear. local-spinnig. mas eficiente pero caro aún.
+
+Esquema de turnos:
+array de semaforos.
+el init realiza signal sobre el primer elemento.
+el primer elemento despierta al próximo.
+y así sucesivamente.
+
+Safety: "nada malo sucede".
+Liveness: "en algun momento algo bueno si sucede".
+Fairness: "los procesos reciben su turno con infinita frecuencia.
+
+WAIT-FREEDOM: ∀τ, ∀k, ∀i. τₖ(i) = TRY ⥰ ∃k'>k. τₖ'(i) = CRIT
+"Todo proceso que intenta acceder a la sección crítica, en algún momento lo logra,
+cada vez que lo intenta".
+"Libre de procesos que esperan por siempre".
+
+WAIT-FREEDOM ≡ ∀i. □IN(i).
+
+Todo proceso que intenta entrar, en algún momento lo logra siempre que lo intenta.
+
+FAIRNESS:
+Para toda ejecución τ, y todo proceso i, si i PUEDE hacer una transición
+lᵢ en una cantidad infinita de estados de τ ENTONCES existe un k tal que
+τₖ ⥰ₗᵢ τₖ₊₁
+
+EXCL:
+Para toda ejecucipon τ y estado τₖ, no puede ahber mas de UN proceso tal que τₖ(i) = CRIT.
+
+EXCL ≡ □ #CRIT ≤ 1.
+
+LOCK-FREEDOM:
+PAra toda ejecución τ y estado τₖ, SI en τₖ hay un proceso i en TRY y ningún i' en CRIT,
+ENTONCES ∃j>k tal que en el estado τⱼ algún proceso i' está en crit.
+
+LOCK-FREEDOM ≡ (#TRY ≥ 1 ∧ #CRIT = 0 ⥰ ⋄#CRIT>0)
+
+Nadie se queda bloqueado pro siemrpe.
+
+• Encerrar en mutex operaciones riesgosas, como manipular variables compartidas. Tambien pueden usarse
+estructuras atómicas para esto.
+• Idea de barrera: comienza baja. en algún momento los procesos se bloquean en la barrera
+    esperando que alguno la libere. Uno la libera, y a su vez el primero que pasa debe liberar al próximo, etc.
+  Para que sea reentrante, aseguramos que el valor final es al menos 1.
+• usar colas y arreglos de semaforos para tener idea de orden. Se encolan
+    identifiacdroes de procesos en orden, y se los desencola en orden para liberar la posición correspondiente
+    a ese identificador de proceso. 
+• Usar una barrera de dos semaforos cuando se deba alternar entre procesos, dando signal en posición contador%2 nos permite alternar.
+• USAR SEMAFOROS CONTADORES. en el caso del cosumidor-productor por ejemplo,
+se usba semaforo lleno = N (que decrementa cada vez que se escribe) y semaforo vacio = 0 que incrementa cuando se escribe.
+sirven para permitir que mas de un proceso acceda al recruso, pero limitado en CUANTOS al mismo tiempo.
+• asegurarse de no perder señales.
+• siempre que se deba asegurar que todos los procesos corran A1 antes que cualquiera corra B1 se usan barreras.
