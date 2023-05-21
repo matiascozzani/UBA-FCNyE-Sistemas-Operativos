@@ -1,0 +1,236 @@
+1)
+a) En efecto, un driver es una pieza de software específico que permite entablar comunicación entre
+una pieza de hardware y el sistema.
+
+c) No es parte del SO intrínsicamente, pero el sistema incorpora algunos drivers consigo que
+cumplen cierta estandarización para permitir que algunos dispositivos puedan utilizarse
+en una instalación limpia del sistema.
+
+e) Podríamos decir que algunas veces lo és, otras no y está armado con Polling.
+
+f) Exacto, esa es la precisa idea de un driver.
+
+2) 
+int driver_read(int *data){
+    int res = IN(CHRONO_CURRENT_TIME);
+    copy_to_user(&res, data, sizeof(res));
+    return IO_OK;
+}
+int driver_write(int *data){
+    OUT(CHRONO_CTRL, CHRONO_RESET);
+    return IO_OK;
+}
+
+3)
+
+int driver_read(int *data){
+    while(true){
+        int status = IN(BTN_STATUS);
+        if(status & 0x1){
+            copy_to_user(&BTN_PRESSED, data, sizeof(BTN_PRESSED));
+            return IO_OK;
+        }
+    }
+}
+
+int driver_write(int *data){
+    OUT(BTN_STATUS, 0x2);
+    return IO_OK;
+}
+
+4)
+int driver_init(){
+    sem_t sem(1);
+    if(request_irq(7, &hanlder) == IRQ_ERROR) return IO_ERROR
+    else return IO_OK;
+}
+int driver_remove(){
+    return free_irq(7);
+}
+
+void handler(){
+    sem.signal();
+}
+
+int driver_read(int *data){
+    sem_wait();
+    copy_to_user(&BTN_PRESSED, data, sizeof(BTN_PRESSED));
+    OUT(BTN_STATUS, BTN_INT);
+}
+
+int driver_write(int *data){
+    OUT(BTN_STATUS, 0x2);
+    return IO_OK;
+}
+
+5)
+//TODO: CONSULTAR
+a) CONSULTAR
+b) CONSULTAR
+
+6)
+IN/OUT deberían ser operaciones de nivel de usuario, para que puedan programarse drivers que interactúen 
+y consuman correctamente los controladores ofrecidos por los dispositivos.
+
+7)
+3 registros escritura:
+dor_io: enciende o apaga el motor.
+arm: numero de pista a seleccionar
+seek_sector: nro de sector dentro de la pista
+
+
+3 registros lectura:
+dor_status: 0 si está apagado (o apagandose).
+            1 si está encendido <- no garantiza que se pueda realizar una operacion exitosa
+
+arm_status: 0 si brazo se está moviendo. 1 si se ubica en pista ARM.
+data_ready: contiene 1 si el dato ya fue enviado.
+
+aux:
+int cantidad_sectores_por_pista() -> devuelve cant sectores x cada pista.
+void escribir_datos(void *src) -> escribe datos apuntados por src en el último sector seleccionado.
+void sleep(int ms)
+
+a) //TODO: CONSULTAR MULTI-THREADING EN ESTE CASO
+
+int driver_init(){
+    int inserciones;
+    int pista;
+
+    return IO_OK;
+}
+
+int driver_open(){
+    inserciones = 0;
+    pista = 0;
+
+    return IO_OK;
+}
+
+void driver_write(int sector, void* data){
+    int dor_status = IN(DOR_STATUS); <- chequeo estado de motor
+    if(!dor_status) OUT(DOR_IO, &1); <- si el motor está apagado, lo prendo.
+ 
+    sleep(50); <- espero velocidad
+
+    //acá ya puedo escribir
+
+    //acá que onda la pista ??
+    int sectores = cantidad_sectores_por_pista();
+    if(inserciones < sectores){
+        OUT(SEEK_SECTOR, sector);
+        inserciones++;
+    }else{
+        pista++;
+        OUT(ARM, pista);
+        while(!IN(ARM_STATUS)){}
+        OUT(SEEK_SECTOR, sector);
+        inserciones = 0;
+    }
+
+    void* datos;
+    copy_from_user(datos, data, sizeof(datos));
+    escribir_datos(datos);
+
+    while(!IN(DATA_READY)){}
+
+    OUT(&0, DOR_IO);
+    sleep(200); <- hace falta un mutex???
+    return IO_OK;
+}
+
+b)
+int driver_init(){
+    int pista;
+    int inserciones;
+    int timerGlobal;
+    bool ready;
+    if(request_irq(6, &handler_6) == IRQ_ERROR) return IO_ERROR;
+    if(request_irq(7, &handler_timer) == IRQ_ERROR) return IO_ERROR;
+    else return IO_OK;
+}
+
+int driver_open(){
+    pista = 0;
+    timerGlobal = 0;
+    inserciones = 0;
+    ready = 0;
+    return IO_OK;
+}
+
+void* handler_timer(){
+    timerGlobal++;
+}
+
+void* handler_6(){
+    ready = 1;
+}
+
+int driver_write(int sector, void* data){
+    int dor_status = IN(DOR_STATUS);
+    if(!dor_status) OUT(DOR_STATUS, &1);
+
+    int localTimer = timerGlobal;
+
+    while(timerGlobal-localTimer < 2){}
+
+    //acá que onda la pista ??
+    int sectores = cantidad_sectores_por_pista();
+    if(inserciones < sectores){
+        OUT(SEEK_SECTOR, sector);
+        inserciones++;
+    }else{
+        pista++;
+        ready = 0;
+        OUT(ARM, pista);
+        while(!ready){};
+        OUT(SEEK_SECTOR, sector);
+        inserciones = 0;
+    }
+
+    void* datos;
+    copy_from_user(datos, data, sizeof(datos));
+    ready = 0;
+    escribir_datos(datos);
+    while(!ready){}
+
+    OUT(&0, DOR_IO);
+
+    localTimer = timerGlobal;
+    while(timerGlobal - localTimer < 5){}
+
+    return IO_OK;
+}
+
+8)
+
+para comenzar impresión:
+
+1) ingresar en LOC_TEXT_POINTER la direc donde arranca el buffer que contiene el string a imprimir.
+2) ingresar en LOC_TEXT_SIZE la cant de caracteres que se deben leer
+3) colocar START en LOC_CTRL
+
+si no hay tinta -> LOW_INK en LOC_CTRL y READY en LOC_STATUS.
+si no, arranca, PRINTING en LOC_CTRL y BUSY en LOC_STATUS.
+al terminar -> FINISHED en LOC_CTRL y READY en LOC_STATUS.
+
+pueden detectar mal el bajo nivel de tinta. alcanza con probar hasta 5 veces para saber si hay o no.
+soporta interrupciones -> HP_LOW_INK_INT bajo nivel,
+                       -> HP_FINISHED_INT terminar impresion.
+
+int driver_init() {
+
+}
+
+int driver_remove(){
+
+}
+
+int driver_write(void* data){
+
+    void* datos;
+    copy_from_user(datos, data, sizeof(datos));
+
+    
+
+}

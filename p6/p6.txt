@@ -1,0 +1,88 @@
+1)
+Dado que en un sistema que implementa FAT los bloques se referencian de la siguiente manera;
+dentro de la tabla, el valor de la entrada i contiene el numero de bloque que le sigue al bloque i.
+
+Es decir,
+
+Si hay 20 bloques:
+
+0       1
+1       3
+2       -
+3       20
+.
+.
+.
+20      eof
+
+El archivo que empieza en 0, sigue en 1, sigue en 3, luego en 20 y termina.
+
+Típicamente, esta tabla se guarda en memoria por lo que la cantidad de accesos necesarios a disco son menores.
+Es decir, para obtener un archivo de N bloques hacemos N accesos a la FAT, y N accesos al disco.
+
+En el caso de que la FAT esté carganda en el disco, deberíamos hacer 2xN lecturas al disco para leer un archibo de N blqoues.
+
+2)
+Primero tengo que saber cuantas bloques hay en el sistema, ya que sabremos que habrá una entrada por cada bloque.
+
+Si la capacidad del cisco es 128GB, y los bloques de 8KB:
+
+8KB ≡ 0,000008GB
+
+128GB / 0,000008GB = 16.000.000 bloques.
+
+Luego, 16.000.000 * 24B = 384.000.000B -> 384.000KB en memoria-> 0,384GB.
+
+La tabla ocupa 0,384GB en memoria/disco.
+
+.b) Cada archivo de 10MB necesitaría de 1000KB / 8KB = 125 bloques.
+
+Luego, entran 16.000.000 / 125 = 128.000 archivos de 10MB.
+
+c) Ocupa 7 bloques, así que -como mucho- el tamaño del archivo es de 7bloques*8KB <= 56KB.
+Podría ocupar menos porque no necesariamente ocupa todo el último bloque.
+
+
+3) 
+
+Tamaño Bloque = 4KB.
+Direccionamiento 8B.
+
+Cuantos bloques podemos direccionar por cada entrada?
+
+4096B / 8B = 512 bloques por CADA ENTRADA.
+
+5 entradas directas = 5 entradas * 512 bloques = 2560 bloques.
+2 entradas indirectas: cada entrada, puede direccionar 512 bloques indirectos:
+2*512 = 1024 bloques indirectos, cada uno puede direccionar 512 bloques directos:
+
+1024*512 = 524288 bloques.
+
+1 entrada doblemente indirectos: 512 bloques indirectos. Cada uno de ellos, direcciona 512 bloques mas,
+
+512 * 512  = 262144 bloques, cada uno 512 bloques= 134217728 bloques.
+
+En total= 2560 + 524288 + 134217728 = 134744576 bloques en total.
+
+134744576 * 4KB = 538978304 KB -> 538.978304 GB.
+
+4)
+Si el 50% del disco está ocupado con archivos de 2KB, quiere decir que
+del total de bloques -134744576- la mitad están ocupados con estos archivos.
+Esto quiere decir que tenemos: 67372288 bloques ocupados con archivos de 2KB.
+
+Sin embargo, estos bloques no estan ocupados en su totalidad, a cada uno le sobran 2KB.
+Por ende, si multiplicamos la cantidad de bloques por el espacio descoupado de cada uno de ellos
+obtendremos el espacio desperciado en archivos de 2KB.
+
+Luego, hay 134744576KB ≈ 134,744GB desperciados con archivos de 2KB.
+
+c) 5000 KB / 4KB = 1250 bloques.
+
+4)  a)10 bloques.
+    b)20 bloques.
+
+5)
+EXT2: 10
+FAT: 
+
