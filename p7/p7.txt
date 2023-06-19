@@ -1,0 +1,144 @@
+1)
+a)
+Depende que tolerancia tenga a TIMEOUTS el nodo A.
+
+Podría pasar que el nodo A tenga una tolerancia a timeouts baja y por ende no podría
+diferenciar entre el caso en el que se cayó el nodo B o que sencillamente está tardando mucho
+en responder.
+
+b) No, no se puede asumir. D se podría haber caído justo después de enviarle el mensaje
+a C.
+
+c) Sin información adicional incrustada dentro del mensaje (un timestamp, por ejemplo) no es posible
+determinar cuál envió su mensaje primero.
+
+
+2) 
+La respuesta a esta pregunta radica en si los procesadores pueden seguir operando 
+una vez que alguno falla. Si la respuesta es que sí, entonces tenemos un sistema distribuido 
+que descentraliza las operaciones pero que al mismo tiempo cuenta con la ventaja de comunicarse
+con los nodos del sistema como si fueran locales.
+
+Si la espuesta que no es posible continuar operando si alguno procesador falló, entonces
+estamos frente a un sistema paralelo.
+
+
+3)
+Si, resuelve este problema.
+
+Si tiene que existir un mecanismo de confirmación por parte de los nodos, entonces los nodos
+pueden registrar de alguna manera un log que establece que ellos habían confirmado la operación
+y realizarla al levantarse.
+
+Así mismo, una vez que los nodos esperan confirmación entre sí pueden replicar el pedido
+si es que algún nodo había confirmado la escritura pero no había confirmado la misma.
+
+4) 
+
+Una forma de hacerlo es permitir que todos los nodos envíen a derecha su id. Cada vez que un nodo
+X recibe un ID del nodo a su izquierda, entonces devuelven nuevamente un mensaje a derecha
+en el que envían el menor entre su propio ID y el que les llegó de la izquierda.
+
+Tarde o temprano el anillo estará inundado por mensajes que contienen el id minimal de proceso.
+
+Esta complejidad es en efecto, O(n²) donde n es la cantidad de mensajes, ya que cada uno envía un mensaje (n)
+pero cada vez que recibe un mensaje devuelve otra vez otro mensaje, n veces.
+
+
+Este algoritmo es conocido como LCR.
+
+La idea que propongo es la siguiente:
+
+Cada nodo envia hacia derecha e izquierda su UID.
+Cada nodo que recibe un mensaje, envía un mensaje a izquierda y derecha conteniendo el menor
+entre su propio ID y el del mensaje que le llegó.
+
+Una vez que a un nodo le llegue tanto por izquierda como por derecha su UID, entonces es el lider.
+
+Solo resta que le informe al resto.
+
+Este algoritmo tiene complejidad O(nlog(n)).
+
+
+**************CONSULTAR, NO ES CIERTO ^^^^****************
+
+OTra idea: dos fases, reconocimiento de nodos, elección de lider.
+
+Algún proceso arranca y envía a derecha una lista que contiene su ID en la primer posición.
+Cada nodo se agrega a la lista y la pasa a derecha.
+Cuando la lista llega nuevamente al primer proceso que envió el mensaje, termina fase reconocimiento.
+ Ese nodo recorre la lista y proclama lider
+al menor UID encontrado dentro de la lista. <- elección de lider.
+
+Cada nodo envía un mensaje a derecha, n mensajes.
+Sumado al mensaje de determinación de lider son
+n+1 mensajes, O(n).
+
+
+5) Se puede utilizar el Bully Algorithm "Inverso". 
+
+Algún nodo determina que se ha caido el lider y comienza la elección de uno nuevo.
+
+Broadcastea su propio ID a todos los nodos que conoce, y que tienen UID menor que él:
+
+    - Cada uno de esos nodos:
+        - Responde si su propio ID es el menor.
+        - No responde en otro caso.
+
+Si nadie le responde, entonces tiene el UID menor de todos y por ende se proclama lider.
+
+Si alguien le responde, entonces ese nodo que responde arranca el proceso nuevamente.
+
+Eventualmente, algún nodo no recibirá respuestas de nadie -pues es el de menor UID- y podrá proclamarse lider.
+
+Esta idea puede incorporar perfectamente la partición de la red, pues cada que algún nodo
+pase un determinado tiempo T en no recibir mensajes de su lider, puede asumir que este cayó y comenzar
+un proceso de selección dentro de los nodos que aún están conectados a él. Y este proceso puede darse
+en las dos particiones.
+
+6) 
+ CONSULTAR
+
+7.1) Se logra elegir a un lider con este algoritmo que es muy muy similar al Bully Algorithm.
+
+La diferencia que encuentro con respecto al Bully Algorithm es que en el caso éste
+hay un nodo que oficia de "portavoz" de la votación, mientras que en el caso del Bully
+es ese mismo nodo que en realidad debería ser el lider quien toma la posta de la elección y se encarga
+de broadcastear su nueva posición de lider.
+
+En algún punto, este algoritmo ofrece una componente mas de resistencia a fallas: si el nuevo lider
+cayera inmediatamente después de haber sido elegido lider, como no habrá respondido con ACEPTAR al nodo que envió el mensaje coordinador
+puede buscarse otro. Sigue habiendo algunos problemas que tienen que ver con el momento posterior,
+¿Qué sucede si un lider se cae luego de responder ACEPTAR?
+
+El bully algorithm también puede hacerlo pero solo cuando algún nodo pueda determinar que el lider cayó.
+Y eso puede tardar tiempo en suceder.
+
+8) 
+La cantidad de mensajes envíados en este protocolo es mayor que en un 2PC clásico.
+Esto es debido a que cada nodo le responde no solo al coordinador sino a otros nodos.
+
+La diferencia radical que observo tiene que ver con el contexto de uso.
+Este algoritmo podría estar poniendo la disponibilidad del sistema por encima de la consistencia.
+
+Si se da el caso de que todos respondieron que si, pero luego cayó el coordinador o alguno de esos nodos
+la transacción puede ser hecha sin problemas, dado que todos habían llegado a responder que si.
+
+Esos nodos que cayeron bien podrían tener un log guardado con la información que debían escribir
+y reanudar la operación en el momento en el que se levanten.
+
+
+Ahora, esto puede dar lugar a información replicada de manera inconsistente, pero también
+asegura la disponibilidad del sistema. Conjunto con esto, se exhibe una tolerancia a fallos en cierto sentido mayor.
+
+Esto es debido a que como se des-centraliza la comunicación entre los nodos, si el coordinador cae luego de haber iniciado 
+la votación, el protocolo no se rompe, el resto de los nodos puede decidir en función de lo que diga el resto.
+
+Usaría uno o el otro en función de qué característica del sistema se tiene que asegurar:
+
+2PC Centralizado: consistencia de datos.
+2PC Descentralizado: disponibilidad del sistema.
+
+9) La solución es 2PC, y esto se debe a que es impresindible mantener la consistencia de los datos
+y efectuar las operaciones SI Y SOLO SI es posible realizarlas, y en caso de no ser posible
+no hacer abosolutamente nada. En algún sentido precisamos una característica de "atomicidad".

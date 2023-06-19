@@ -234,3 +234,14 @@ int driver_write(void* data){
     
 
 }
+
+
+10)
+
+1 camara
+1 sensor movimiento
+software control.
+
+sensor detecta -> se prende camara por tiempo T.
+                -> si se vuelve a detectar, otro tiempo T.
+    

@@ -86,3 +86,23 @@ c) 5000 KB / 4KB = 1250 bloques.
 EXT2: 10
 FAT: 
 
+6) TODO: consultar FAT.
+
+b) Se debe leer solamente el bloque de datos asociado al inodo que implementa ese link simbólico.
+
+7) a) Para este caso debería implementarse un filesystem basado en i-nodos dado que FAT
+        no admite la implementación de links.
+
+    b y d) En estos caso también debería implementarse un filesystem basado en i-nodos,
+    dado que sistemas que implementen enfoques inspirados en FAT deberán tener la 
+    tabla siempre respaldada en disco. El problema en sí, es que esta tabla
+    crece linealmente con el tamaño del disco, pues para cada sector del disco
+    debemos mantener una referencia en la tabla.
+    Un sistema basado en i-nodos debe tener en memoria principal solamente aquellos
+    archivos abiertos.
+
+    c) Si el tamaño maximo de archivo solo debe estar limitado por el tamaño del disco,
+    entonces sería razonable un sistema FAT. En un sistema basao en i-nodos, los archivos
+    estan limitados por la estructura misma del inodo y la cantidad de punteros directos,
+    indirectos simples, dobles, o triples que este implementa.
+

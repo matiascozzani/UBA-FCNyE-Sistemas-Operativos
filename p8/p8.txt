@@ -1,0 +1,143 @@
+1)
+a) El sistema no almacena la contraseña pero si su hash.
+Por ende lo que puede hacer para autenticar correctamente es hashear el input del usuario y comparar
+ese hash con el almacenado, en caso de ser iguales, el mensaje era el mismo y por ende la contraseña es la que el usuario ingresó.
+
+b) La probabilidad de acertar es: 1/2⁶⁴
+
+c) Para tener un 50% de chances de haber asertado el hash, es necesario haber
+recorrido el 50% del universo posible de hashes.
+
+Esto es, 2⁶⁴ / 2 = 2⁶³. 
+
+2⁶³ = 9,223372037×10¹⁸ cantidad de hashes posibles.
+
+2⁶³ / 1.000.000.000 = 9223372036,854775808 segundos. → 2562047,788015216 horas 
+                    → 106751,991167301 días -> 292,471208678 años.
+
+
+d) 
+
+hay 26 letras minúscula, mas 10 dígitos, son 36 posibilidades.
+
+esto es, 36 posibilidades para cada digito.
+
+en definitiva tenemos: 36⁶. probando mil millones de claves por segundo, son 2,176782336 segundos.
+
+2) a) Un ataque de replay-attack podría vulnerar este sistema.
+Se puede interceptar el hash en el vuelo, y replicar una request al sistema con algún hash
+que sea exitoso -claro, deberían interceptarse tanto la request como la response, para verificar CUAL hash es el correcto-
+
+b) No, no sin realizar ninguna interacción, dado que el hash que puede interceptar tiene embebida la seed.
+Y el atacante no puede saber donde fué concatenada, si al final, o al principio.
+
+3) a) Es una combinación de dos factores: por un lado la utilización de una función insegura: gets.
+Esta función no valida que el tamaño del buffer donde se va a escribir sea mayor o igual que el contenido que se le escribe.
+Esto da lugar a escenarios de stack-based buffer overflow. El segundo factor es que no se valida explícitamente el input.
+
+TODO: consultar.
+b) Se puede controlar básicamente lo que sea, una vez que se sobre-escribe sobre el stack se puede lograr cualquier tipo de comportamiento deseado.
+c) Si, es posible, y de hecho, de eso se trata este ataque.
+d) No. Debe utilizarse otra función en lugar de gets.
+
+4) El stack crece hacia abajo. Cada dirección es de 4bytes.
+    +------------------------------+ 
+    |           xxxxxxxxxxx        |
+    |           rip                | <- return addr.
+    |           rbp                | <- old rbp
+    |           realpass[31-23]    | <- últimos 8bytes = 4*8bytes = 32bytes = char[32]
+    |           realpass[23-15]    |
+    |           realpass[15-07]    |
+    |           realpass[07-00]    | <- primeros 8bytes
+    |           name[31-23]        | <- últimos 8bytes = 4*8bytes = 32bytes = char[32]
+    |           name[23-15]        |
+    |           name[15-07]        |
+    |           name[07-00]        | <- primeros 8bytes
+    |           pass[31-23]        | <- últimos 8bytes = 4*8bytes = 32bytes = char[32]
+    |           pass[23-15]        |
+    |           pass[15-07]        |
+    |           pass[07-00]        | <- primeros 8bytes
+b) ?? consultar
+
+
+
+
+5) a) El flag SetUID. Si al programa se le trasnfiere el ownership a root, y se flaguea con SetUID
+entonces correrá el ejecutable con permisos ROOT.
+
+
+b) Como gets no valida la entrada, el atacante podría pisar todos los valores locales de la función.
+Esto es, pass, salt, y realpass, pudiendo pisar los valores de manera tal que le permitan bypassear el login.
+
+c) Si, igual es un problema. Este programa debería ser cargado con ownership en root y el flag setuid.
+
+Y por ese motivo es que es muy peligroso: inlcuso si no es un problema de autenticación, si es de autorización.
+Un usuario no privilegiado puede manipular el stack de programa de modo que el mismo realice
+ejecución de código arbitraria.
+
+6) Si, el usuario podría pasar algún número no representable en el formate IEEE-754 32bits(tipo float de c++).
+Por ende, el número se representaría como NaN, que no cumple ninguna de las condiciones.
+
+b) No, no sería correcto. En el caso mencionado anteriormente el código devolvería 0.
+
+7)a) b) Ámbos ataques se ven fuertemente afectados por el stack-randomization.
+Al no conocer las direcciones en donde están guardados los datos, es muy dificil realizar
+el ataque de manera precisa para lograr los objetivos:
+    a) No conoceremos donde está guardada la dirección de retorno que la función guarda en la pila antes
+    de comenzar a ejecutarse. Por tanto, será dificil alterarlo para modificar el flujo del programa.
+    Sin embargo, como en definitiva solo estamos queriendo alterar el valor de retorno para
+    alterar el flujo del programa, y no introducioendo un payload malicioso, solo tenemos que
+    adivinar UNA dirección.
+    b) Este caso se vé mucho mas afectado dado que al introducir código malicioso
+    necesitamos garantizar la secuencialidad de la ejecución de todas las instrucciones inyectadas
+    para lograr el objetivo del ataque, por lo que hay muchas mas direcciones (una por cada instrucción)
+    que adivinar para concretar el ataque.
+
+ c) En este caso depende de la configuración del sistema: si las syscalls llegasen a estar cargadas
+ en posiciones estáticas de memoria (FreeRTOS), entonces es el mismo caso que en el a). Sino, es como b).
+
+8)  a) dir = "ls %s;cat /etc/passwd".
+    b) %s;cat /etc/passwd"" -> ls %s;cat /etc/passwd"" también funciona.
+    c) %s && cat /etc/passwd también funciona.
+    d) 
+
+
+    #define BUF_SIZE 1024
+    void wrapper_ls(const char * dir) {
+    char cmd[BUF_SIZE];
+    snprintf(cmd, BUF_SIZE-1, "ls %s", dir);
+    if(strstr(cmd, "&") != NULL || strstr(cmd, ";") != null) puts("directorio inválido") return;
+    system(cmd);
+    }
+
+9) TODO: CONSULTAR
+
+10) No, no garantiza que no se escriba fuera de buf puesto que solo verifica "por arriba" pero no "por abajo".
+    Introducir valores negativos de i permitiría moverse para posiciones mas altas del stack.
+
+    Esto quiere decir se podrían introducir valores negativos para sobre-escribir la dirección de retorno del programa.
+
+    Aún es posible dadas ciertas condiciones, por ejemplo: podría intentarse realizar fuerza-bruta sobre el canario.
+
+11) a) en la línea printf(nombre) ya que es vulnerable a format string.
+
+    b) Con múltiples inputs chaineados puede saberse todo, desde registros en la pila, hasta 
+    valores de variables, hasta el contenido de posiciones de memoria.
+
+    Podría intentar verse el valor de una varibale introduciendo esta string:
+    %d, variable
+
+    Podría verse la posición de memoria donde está guardada:
+    %p, &variable
+
+    o incluso podríamos ver el contendio de una posición dada:
+    %d, *(punteroAMemoria)
+
+    Habría que ir probando tipos hasta que eventualmente demos con el correcto.
+
+    c) Podría ser posible a través de %n, introduciendo la cantidad de bytes correspondientes 
+    con la dirección a la que se quiere saltar e utilizando ese mismo argunento par decidir donde:
+    Luego de haber leído la dirección de retorno:
+    bytes%n, &(direcciónDeRetorno).
+
+    d) No se soluciona.
