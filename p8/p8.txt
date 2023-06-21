@@ -140,4 +140,31 @@ el ataque de manera precisa para lograr los objetivos:
     Luego de haber leído la dirección de retorno:
     bytes%n, &(direcciónDeRetorno).
 
-    d) No se soluciona.
+    d) Si es posible reescribir la dirección de retorno de printf, entonces colocar
+        un exit justo después no sirve, ya que printf no volverá a ese exit.
+
+12) No, no es segura. Nuevamente, se podría sobre-escribir el valor de retorno de la propia printf
+    logrando saltar el exit.
+
+13) Si llenamos ciphers hasta que se dé la siguiente situación:
+    len = 1, cp = ultimo caracter de algun cipher QUE NO ES EL ÚLTIMO.
+    en esta iteración, se ejecutará len--==0.
+
+    Acá es importante notar un comportamiento:
+    len--==0 decrementa luego de realizar la comparación
+    por ende:
+    1--==0 devolverá falso, y luego decrementará.
+
+    Esto quiere decir que ese if no dará true, por ende 
+    se copia el último caracter del cipher actual.
+
+    Por ende, luego se escribe el : al final del actual puntero p.
+
+    Esto quiere decir que si todavía quedan ciphers en el array, len vale 0
+    se decrementa en la próxima cadena de cipher
+    y nunca mas vuelve a dar true la comprobación del underflow del buffer.
+
+    Luego, es posible escribir mas allá de buf.
+
+    b) 
+    
