@@ -1,0 +1,216 @@
+Drivers:
+
+    1) No se pueden utilizar los punteros que el usuario le pasa a las funciones del driver libremente.
+    Es obligatorio utilizar copy_to_user y copy_from_user antes de utilizar los punteros.
+
+    Esto se debía a protecciones memoria y direcciones válidas.
+
+    **Burocracia drivers: Definir FOPS, major, minor.
+    Major: identifica un driver en particular.
+    Minor: identifica un dispositivo específico que el driver maneja.
+
+    Corren con máximo privilegio.
+
+    Polling: 
+        -   consume cpu pero es sencillo. 
+        -   Verificar constantemente. 
+            Típicamente utiliza registro status sobre el que preguntamos disponibilidad.4
+        -   Cambios de contexto controlados.
+    Interrupciones: 
+        -   el dispositivo avisa. 
+        -   no consume cpu, cambios de contexto impredecibles. mas difcil.
+    DMA: 
+        -   transferir grandes volumenes de info. 
+        -   Requiere soporte HW. cuando DMA termina, interrumpe CPU.
+
+    Programador se comunica con API del SO a dispositivos: open, close, read, write, seek.
+    Api alto nivel: fclose, fread, fwrite, fgetc, fputc, fgets, fputs, fscanf, fprintf.
+
+    Estas apis utilizan los drivers(modulos agregados al SO) del dispositivo que implementan qué debe hacer un write, un read, etc.
+    ese driver interactúa con el dispositivo directamente (con registros, buffer, étc).
+
+    CharDevice: byte a byte. No soportan acceso arbitrario.
+    BlockDevice: información de a bloque. Soportan acceso arbitrario.
+
+    Spooling: encolamos trabajos y otro thread se encarga de ir desencolando y procesando. El kernel no se enetra, el usuario sí.
+
+    OPEN es atómico.
+
+    RAID5: se distribuyen en N+1 discos. No hay redundancia localizada. Cada bloque va a un disco distinto.
+
+    Cosas a determinar: cúando el usuario necesita hacer uso del driver? qué debe poder hacer con él?
+
+    OUT(IO_ADDRESS, data)
+    request_irq(int irq, void* handler)
+    copy_to_user(to, from, count)
+    copy_from_user(to, from, count)
+    kmalloc(size, GFP_Kernel), kfree
+    sema_init(sem, val), down(sem), up(sem)
+
+    En driver init inicializamos primitivas e interrupciones. OJO CON LAS RACE CONDITIONS.
+    Pueden darse sobre registros del dispositivo si tienen que almacenar valores que pueden llegar a pisarse por ejemplo.
+    NO PODEMOS USAR LIBC.
+
+    Por las dudas usar malloc.
+
+    Si necesito tuplas: structs. structs, structs, structs. existe arreglo de structs. pero no pueden ser structs variables.
+
+Filesystem:
+
+    FAT: Cada entrada i de la tabla corresponde con el número del bloque que le sigue a i.
+         Toda la tabla cargada en memoria, inmanejable para discos grandes. 
+         Muchísima contención. 
+         Puede no llegar a bajarse la tabla de memoria a disco otra vez.
+
+         Los directorios en fat indican el índice del primer bloque de cada archivo. Root es distinguido.
+
+         En el directorio busco donde arranca un archivo, y en la FAT consulto el resto.
+
+    I-Nodos: 
+    Cada archivo tiene uno. 
+    Las primeras direcciones son atributos, luego punteros directo a bloques.
+    Luego, una entrada que apunta a un bloque de datos que contiene punteros (simplemente indirecta).
+    Luego, una doblemente indirecta, que apunta a una tabla de indirecciones simples.
+    Y una triple, que apunta a una tabla de doble indirectas, que apuntan a una tabla de simple indirectas.
+
+    Mejor consistencia, solo están en memoria los archivos abiertos.
+
+    Se reserva un inodo como entrada a root directory, por cada archivo o directorio dentro de root hay una netrada en el inodo.
+    Dentro de un bloque se guarda una lista inodos, nombre de archivo/directorio.
+
+    En ext2 los bloques de disco están particionados en grupos de bloques contiguos.
+    Cada grupo de bloques tiene datos -superbloque, descpritors de grupo, tablas de inodos- y bloques a inodos.
+
+    Los directorios tienen su propio inodo. 
+    Y cada bloque es una lista de entradas de directorio.
+    Las primeras dos entradas son . y .. 
+
+    IMPORTANTISIMO:
+    Recordar que los direntry tienen entradas variables.
+    Así que cuando esté queriendo recorrer dir_entries lo mejor es:
+
+        ciclar por los bloques de datos hasta que haya consumido todo el size en bytes del inodo directorio.
+        pedimos un buffer que mida 2*block_size
+        obtener las direcciones de dos bloques contiguos.
+        Leer ambos y cargarlos al buffer.
+        
+        Ahora, seteamos un offset_dentry que nos va a indicar cuanto debo moverme exactamente para pasar a la próxima,
+        cada dir entry tiene su longitud adentro así que usamos ese valor para mover el offset.
+
+        Hacemos lo que tengamos que hacer para cada entry.
+
+        Cuando terminamos un bloque (offset_dentry > block_size), 
+        tenemos que mandar el segundo que habíamos cargado a la primer posicion y cargar otro,
+        ajustamos el offset_dentry restandole un block_size entero.
+
+    Un mismo inodo puede estar referenciado por dos dir_entries distintas, HARD-LINK.
+    . y .. son ejemplos de hardlinks.
+    Cada inodo tiene un count de cantidad de referencias al inodo. El inodo se borra si se quiere borrar la última referencia.
+
+    También tenemos enlaces simbólicos: un inodo adicional que tiene un path absoluto al archivo que referecia.
+
+
+Sistemas distribuidos:
+
+    -   Soluciones para locking:
+        -   Un nodo coordinador funciona de lock. Controla quienes pueden acceder a qué recursos.
+            Cons: unico punto de falla, cuello de botella en el coordinador.
+        
+        -   Orden parcial entre eventos:
+            Cada procesador tiene un reloj, cada mensaje maraca un tiempo t.
+            Cuando se recibe y t es mayor que el valor actual el reloj se actualiza a t+1.
+            Los empates se deciden arbitrariamente.
+
+        -   En anillos: token passing: el que tiene el token puede acceder.
+                        request: paso mensaje de solicitud a todos, nodos pueden encolar solicitud o responder directamente.
+                        puedo entrar cuando todos me respondieron.
+                        Si entro, al salir, respondo todos los pedidos en la cola.
+                        Respondo inmediatamente si: no me interesa la secciópn crítica
+                                                    quiero entrar, aún no lo recibí, pero el tiemstamp de la solicitud es menor que el mio.
+                        todos tienen que conocerse.
+        -   Locks descentralizado:
+
+                -   Protocolo de mayoría:
+                    queremos obtener lock sobre objeto copiado en n lugares.
+                    Pedimos al menos n/2 + 1 sitios, cada uno nos responde si puede o no darnoslo.
+                    Cada copia del objeto tiene un número de versión, si lo escribimos tomamos el mas alto y lo incrementamos.
+        RPC (Remote procedure call) usar funciones de otro process de manera remota.           
+   
+    Scheduling: local: procesador a un proceso ready
+                global: asignar proceso a un procesador:
+                    compartir carga, estática -affinity-.
+                    o dinámica, variando durante la ejecucion.
+   
+
+    2PC: locking distribuido, lider que no falla:
+
+        Phase request:
+            - Lider pregunta a todos si pueden realizar la operación.
+            - Los nodos receptores ejecutan lo pedido, lockeando recrusos que tengan que utilizar
+              Pero no hacen el commit, guardan en una tabla como deshacer lo que tenían que hacer.
+            - Contestan "OK" o "ABORT".
+
+        Phase Complete:
+            -   Lider envía "COMMIT" o "ROLLBACK"
+            - Cada nodo completa/deshache la operación y libera recursos.
+            - Nodos responden COMMIT_OK
+            - Lider finaliza el commit cuando todos le respondieron commit.
+
+    3PC: locking distribuido, lider puede fallar.
+    Si el lider falla en primera o segunda fase se elije uno nuevo y se puede abortar o reiniciar la operación.
+    Si falla en la última fase se elije un nuevo lider y les pregunta a todos en qué estado están, si uno solo dice que está commiteando
+    entonces se continúa sin abortar -dado que el lider anterior había llegado a la última fase-
+
+         Phase request:
+            - Lider pregunta a todos si pueden realizar la operación.
+            - Los nodos receptores ejecutan lo pedido, lockeando recrusos que tengan que utilizar
+              Pero no hacen el commit, guardan en una tabla como deshacer lo que tenían que hacer.
+            - Contestan "OK" o "ABORT".
+
+        2da fase:
+            SI EL LIDER RECIBE ALGÚN ABORT, manda ROLLBACK.
+            Sino, manda PREPARE_TO_COMMIT. los nodos responden si están o no preparados.
+
+        Phase Complete:
+            -   Lider envía "COMMIT" o "ROLLBACK"
+            - Cada nodo completa/deshache la operación y libera recursos.
+            - Nodos responden COMMIT_OK
+            - Lider finaliza el commit cuando todos le respondieron commit.
+
+    LCR: Elección lider anillo. O(n). Pasan el id entre todos y se va restransmitiendo solo el prioritario
+    hasta que al prioritario le llega por izq y derecha su propio id.
+
+    FloodMax: misma idea pero no hace falta que sea un anillo. Se popula la red con el id prioritario.
+    Termina cuando el que debeería ser el lider recibe por todos lados su propio ID. O(n*diámetro-camino mas largo-)
+
+    BullyAlgorithM: -grafo compeltamente conexo-
+
+    Cada nodo manda a todos los nodos con ID MAYOR, que quiere ser lider.
+    Si nadie contesta, es lider.
+    Cada nodo que le llega repite el proceso también a los de id mayor, pero le cntesta a los de ID menor que él va a ser el que se encargue de liderar.
+    Si nadie le contesta, es lider. O(n^2)
+
+
+    Modelo de fallas_
+        -   Nadie falla
+        -   Procesos caen pero no levantan.
+        -   Procesos caen y levantan.
+        -   Procesos caen y pueden o no levantar
+        -   La red se particiona.
+
+Seguridad:
+
+    Confidencialidad, Integridad, disponibilidad.
+
+    Resistencia preimagen: dado h es dificil encontrar m tal que h = hash(m).
+    Segunda preimagen: dado m1 es dificil encontrar m₂ tal que m1 != m2 && hash(m1) = hash(m2).
+
+    SetUID setGID permite correr con privilegios elevados.
+
+    Flag setuid tiene que estar prendido y el owner tiene que ser root (o cualquier usuario y correra con esos privilegios).
+
+    Format string: Input no sanitizado. Ptencialmente escalado de privilegios y ejección de código.
+
+                Solución: Whitelist, blacklist.
+
+    PATH o cualquier ENV variable controlada por user.

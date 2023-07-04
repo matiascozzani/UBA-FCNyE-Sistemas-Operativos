@@ -18,9 +18,9 @@ Si hay 20 bloques:
 El archivo que empieza en 0, sigue en 1, sigue en 3, luego en 20 y termina.
 
 Típicamente, esta tabla se guarda en memoria por lo que la cantidad de accesos necesarios a disco son menores.
-Es decir, para obtener un archivo de N bloques hacemos N accesos a la FAT, y N accesos al disco.
+Es decir, para obtener un archivo de N bloques hacemos N accesos a la FAT.
 
-En el caso de que la FAT esté carganda en el disco, deberíamos hacer 2xN lecturas al disco para leer un archibo de N blqoues.
+En el caso de que la FAT esté carganda en el disco, deberíamos hacer N+1 lecturas al disco para leer un archibo de N blqoues.
 
 2)
 Primero tengo que saber cuantas bloques hay en el sistema, ya que sabremos que habrá una entrada por cada bloque.
@@ -35,9 +35,9 @@ Luego, 16.000.000 * 24B = 384.000.000B -> 384.000KB en memoria-> 0,384GB.
 
 La tabla ocupa 0,384GB en memoria/disco.
 
-.b) Cada archivo de 10MB necesitaría de 1000KB / 8KB = 125 bloques.
+.b) Cada archivo de 10MB necesitaría de 1024KB * 10 / 8KB = 2048 bloques.
 
-Luego, entran 16.000.000 / 125 = 128.000 archivos de 10MB.
+Luego, entran 16.000.000 / 2048 = 7812 archivos de 10MB.
 
 c) Ocupa 7 bloques, así que -como mucho- el tamaño del archivo es de 7bloques*8KB <= 56KB.
 Podría ocupar menos porque no necesariamente ocupa todo el último bloque.
@@ -52,48 +52,51 @@ Cuantos bloques podemos direccionar por cada entrada?
 
 4096B / 8B = 512 bloques por CADA ENTRADA.
 
-5 entradas directas = 5 entradas * 512 bloques = 2560 bloques.
-2 entradas indirectas: cada entrada, puede direccionar 512 bloques indirectos:
-2*512 = 1024 bloques indirectos, cada uno puede direccionar 512 bloques directos:
+5 entradas directas = 5 bloques = 5 bloques.
 
-1024*512 = 524288 bloques.
+2 indirectas -> cada una, direcciona 512 directos -> 1024 bloques
 
-1 entrada doblemente indirectos: 512 bloques indirectos. Cada uno de ellos, direcciona 512 bloques mas,
+1 doble indirecta-> apunta a una tabla con 512 indirectas -> cada indirecta, 512 directos.
 
-512 * 512  = 262144 bloques, cada uno 512 bloques= 134217728 bloques.
+512*512 = 262144 bloques 
 
-En total= 2560 + 524288 + 134217728 = 134744576 bloques en total.
+262144 * 4KB = 1048576KB -> 1024MB -> 1GB
 
-134744576 * 4KB = 538978304 KB -> 538.978304 GB.
-
-4)
-Si el 50% del disco está ocupado con archivos de 2KB, quiere decir que
-del total de bloques -134744576- la mitad están ocupados con estos archivos.
-Esto quiere decir que tenemos: 67372288 bloques ocupados con archivos de 2KB.
-
-Sin embargo, estos bloques no estan ocupados en su totalidad, a cada uno le sobran 2KB.
-Por ende, si multiplicamos la cantidad de bloques por el espacio descoupado de cada uno de ellos
-obtendremos el espacio desperciado en archivos de 2KB.
-
-Luego, hay 134744576KB ≈ 134,744GB desperciados con archivos de 2KB.
+b)
+El 25% del disco.
 
 c) 5000 KB / 4KB = 1250 bloques.
 
+Para leer todo ese archivo tengo que:
+
+    5 bloques directos.
+    1 bloque, que me permite leer los primeros 512 bloques del archivo.
+    1 bloque que me premite leer los segundos 512 bloques del archivo. hasta acá, leí 1029+2 veces.
+    1 bloque doblemente indirecto, 1 bloque indirecto, y luego ya me alcanza.
+
+    Entonces: 1029+2+1+1+221 bloques: 1254 lecturas
 4)  a)10 bloques.
-    b)20 bloques.
+    b)20 bloques aprox.
 
-5)
-EXT2: 10
-FAT: 
+5) Asumimos 4B por entrada, 1MB blockSize. 1024B / 4B = 256 entradas
+    I)  FAT: 9
+        EXT2: 6 + 1 = 7
+    II) FAT: 7
+        EXT2: 6 + 1 + 1 = 8 accesos
+    III) FAT: 3
+         EXT2: 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 = 9
+    IV) FAT: 36
+        EXT2: 1 + 36
 
-6) TODO: consultar FAT.
-
-b) Se debe leer solamente el bloque de datos asociado al inodo que implementa ese link simbólico.
+6) a) 3
+   b) 4 //TODO: Seguro?
 
 7) a) Para este caso debería implementarse un filesystem basado en i-nodos dado que FAT
         no admite la implementación de links.
 
-    b y d) En estos caso también debería implementarse un filesystem basado en i-nodos,
+    b) FAT Dado que i-nodos requiere una cantidad mayor de estructuras en el disco que FAT.
+
+    d) En estos caso también debería implementarse un filesystem basado en i-nodos,
     dado que sistemas que implementen enfoques inspirados en FAT deberán tener la 
     tabla siempre respaldada en disco. El problema en sí, es que esta tabla
     crece linealmente con el tamaño del disco, pues para cada sector del disco
@@ -106,3 +109,62 @@ b) Se debe leer solamente el bloque de datos asociado al inodo que implementa es
     estan limitados por la estructura misma del inodo y la cantidad de punteros directos,
     indirectos simples, dobles, o triples que este implementa.
 
+10)
+
+    ↓ subdirectorio
+[struct_entrada_directorio, struct_entrada_directorio, ...]
+
+Debería tener el nombre del subdirectorio, para poder establecer comparaciones y ver con qué subdirectorio
+se corresponden los datos que traigo.
+
+Deberíamos tener un booleano que indica si este es otro subdirectorio o un file.
+
+Debería guardar el bloque por el que empieza.
+
+b)
+
+cargar_archivos(directorios[]){
+
+    root_directories = root_table();
+    target_dir;
+    target_file;
+
+    bool found = 0;
+
+    for directory in root_directories:
+        if(directory.name == directorios[0]){
+            if(directory.type == file){
+                target_block = directory.initial_block;
+                found = 1;
+            }
+            else{
+                target_dir = parse_directory_entries(directory)
+            }
+        }
+    count = 1;
+    while(!found){
+        for directory in target_dir:
+            if(directory.name == directorios[count]){
+                if(directory.type == file){
+                    target_block = directory.initial_block;
+                    found = 1;
+                }
+                else{
+                    target_dir = parse_directory_entries(directory)
+                    count++;
+                }
+            }
+
+    }
+
+    //en este punto ya sé que si o si tengo en target_block la dirección del primer bloque del archivo
+    do{
+        entries.append(target_block)
+        target_block = FAT_entry(target_block);
+    }while(target_block != EOF)
+    raw_data;
+    for entry in entries:
+        raw_data += read_blocks(entry);
+
+    return raw_data;
+}

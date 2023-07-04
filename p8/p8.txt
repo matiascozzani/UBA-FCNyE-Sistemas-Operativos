@@ -15,9 +15,7 @@ Esto es, 2⁶⁴ / 2 = 2⁶³.
 2⁶³ / 1.000.000.000 = 9223372036,854775808 segundos. → 2562047,788015216 horas 
                     → 106751,991167301 días -> 292,471208678 años.
 
-
-d) 
-
+d)
 hay 26 letras minúscula, mas 10 dígitos, son 36 posibilidades.
 
 esto es, 36 posibilidades para cada digito.
@@ -28,8 +26,7 @@ en definitiva tenemos: 36⁶. probando mil millones de claves por segundo, son 2
 Se puede interceptar el hash en el vuelo, y replicar una request al sistema con algún hash
 que sea exitoso -claro, deberían interceptarse tanto la request como la response, para verificar CUAL hash es el correcto-
 
-b) No, no sin realizar ninguna interacción, dado que el hash que puede interceptar tiene embebida la seed.
-Y el atacante no puede saber donde fué concatenada, si al final, o al principio.
+b) 
 
 3) a) Es una combinación de dos factores: por un lado la utilización de una función insegura: gets.
 Esta función no valida que el tamaño del buffer donde se va a escribir sea mayor o igual que el contenido que se le escribe.
@@ -59,7 +56,9 @@ d) No. Debe utilizarse otra función en lugar de gets.
     |           pass[07-00]        | <- primeros 8bytes
 b) ?? consultar
 
-
+en user: pepito
+en pass:
+123\0+27bytesbasura+admin\0+26bytes basura
 
 
 5) a) El flag SetUID. Si al programa se le trasnfiere el ownership a root, y se flaguea con SetUID
@@ -100,7 +99,6 @@ el ataque de manera precisa para lograr los objetivos:
     b) %s;cat /etc/passwd"" -> ls %s;cat /etc/passwd"" también funciona.
     c) %s && cat /etc/passwd también funciona.
     d) 
-
 
     #define BUF_SIZE 1024
     void wrapper_ls(const char * dir) {

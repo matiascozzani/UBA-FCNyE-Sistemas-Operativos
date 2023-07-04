@@ -8,7 +8,7 @@ en una instalación limpia del sistema.
 
 e) Podríamos decir que algunas veces lo és, otras no y está armado con Polling.
 
-f) Exacto, esa es la precisa idea de un driver.
+g) ..
 
 2) 
 int driver_read(int *data){
@@ -34,7 +34,7 @@ int driver_read(int *data){
 }
 
 int driver_write(int *data){
-    OUT(BTN_STATUS, 0x2);
+    OUT(BTN_STATUS, 0x0);
     return IO_OK;
 }
 
@@ -59,13 +59,13 @@ int driver_read(int *data){
 }
 
 int driver_write(int *data){
-    OUT(BTN_STATUS, 0x2);
+    OUT(BTN_STATUS, 0x0);
     return IO_OK;
 }
 
 5)
 //TODO: CONSULTAR
-a) CONSULTAR
+a) Seguro tiene que haber un chequeo de autorización.
 b) CONSULTAR
 
 6)
@@ -92,11 +92,9 @@ void escribir_datos(void *src) -> escribe datos apuntados por src en el último 
 void sleep(int ms)
 
 a) //TODO: CONSULTAR MULTI-THREADING EN ESTE CASO
-
+int inserciones; //TODO: debería ser malloc?
+int pista; //TODO: debería ser malloc?
 int driver_init(){
-    int inserciones;
-    int pista;
-
     return IO_OK;
 }
 
@@ -116,8 +114,8 @@ void driver_write(int sector, void* data){
     //acá ya puedo escribir
 
     //acá que onda la pista ??
-    int sectores = cantidad_sectores_por_pista();
-    if(inserciones < sectores){
+    int cantSectores = cantidad_sectores_por_pista();
+    if(inserciones < cantSectores){
         OUT(SEEK_SECTOR, sector);
         inserciones++;
     }else{
@@ -125,10 +123,10 @@ void driver_write(int sector, void* data){
         OUT(ARM, pista);
         while(!IN(ARM_STATUS)){}
         OUT(SEEK_SECTOR, sector);
-        inserciones = 0;
+        inserciones = 1;
     }
 
-    void* datos;
+    void* datos = kmalloc(8, GPF_kernel); <- //TODO: debería ser malloc? probablemente
     copy_from_user(datos, data, sizeof(datos));
     escribir_datos(datos);
 
@@ -140,13 +138,17 @@ void driver_write(int sector, void* data){
 }
 
 b)
+
+int pista;
+int inserciones;
+int timerGlobal;
+bool ready;
+sem_t sem;
 int driver_init(){
-    int pista;
-    int inserciones;
-    int timerGlobal;
-    bool ready;
+    //Burocracia de driver
     if(request_irq(6, &handler_6) == IRQ_ERROR) return IO_ERROR;
     if(request_irq(7, &handler_timer) == IRQ_ERROR) return IO_ERROR;
+    sem = sem(0);
     else return IO_OK;
 }
 
@@ -163,7 +165,7 @@ void* handler_timer(){
 }
 
 void* handler_6(){
-    ready = 1;
+    sem.signal();
 }
 
 int driver_write(int sector, void* data){
@@ -183,21 +185,20 @@ int driver_write(int sector, void* data){
         pista++;
         ready = 0;
         OUT(ARM, pista);
-        while(!ready){};
+        sem.wait()
         OUT(SEEK_SECTOR, sector);
         inserciones = 0;
     }
 
     void* datos;
     copy_from_user(datos, data, sizeof(datos));
-    ready = 0;
     escribir_datos(datos);
-    while(!ready){}
+    sem_wait()
 
     OUT(&0, DOR_IO);
 
     localTimer = timerGlobal;
-    while(timerGlobal - localTimer < 5){}
+    while(timerGlobal - localTimer < 5){} //TODO: Qué onda esto?
 
     return IO_OK;
 }
@@ -218,12 +219,19 @@ pueden detectar mal el bajo nivel de tinta. alcanza con probar hasta 5 veces par
 soporta interrupciones -> HP_LOW_INK_INT bajo nivel,
                        -> HP_FINISHED_INT terminar impresion.
 
-int driver_init() {
+sem_t sem(1);
+sem_t semN(0);
 
+void handler_finish(int signal){
+    semN.signal();
+}
+
+int driver_init() {
+    if(request_irq(HP_FINISHED_INT, &handler_finish) == IRQ_ERROR) return IO_ERROR;
 }
 
 int driver_remove(){
-
+    free_irq(HP_FINISHED_INT);
 }
 
 int driver_write(void* data){
@@ -231,10 +239,34 @@ int driver_write(void* data){
     void* datos;
     copy_from_user(datos, data, sizeof(datos));
 
-    
+    sem.wait();
+
+    OUT(&datos[0], LOC_TEXT_POINTER); <- escribo la dirección del primer elemento.
+    OUT(SIZE, LOC_TEXT_SIZE); <- //TODO: ¿Cómo sé cuánto?
+        
+    int checks = 0;
+    do{
+        OUT(START, LOC_CTRL);
+        checks++;
+    }while(IN(LOC_CTRL) != PRINTING && checks < 5)
+
+    if(checks == 5){
+        sem.signal();
+        exit();
+    }    
+    //acá ya puedo arrancar
+    semN.wait();
+    sem.signal();
 
 }
 
+En este caso se decide utilizar polling para determinar si hay o no tinta disponible, e interrupciones en el caso
+de la finalización de una impresión. Esto se debe a que dado que el funcionamiento del hardware de la impresora no es correcto
+es preferible estar completamente seguros de forma "manual" de que hay o no hay tinta y no responder aleatoriamente
+a algunas de las interrupciones de tinta que bien podrían ser un falso-positivo.
+
+Por otro lado, para generar estructuras de contención correctas y no generar condiciones de carrera con respecto a la manipulación
+de la impresora entre impresiones, es mejor utilizar interrupciones.
 
 10)
 
@@ -244,4 +276,90 @@ software control.
 
 sensor detecta -> se prende camara por tiempo T.
                 -> si se vuelve a detectar, otro tiempo T.
-    
+
+Cámara: 
+    Registros:
+        CAMERA_ON: 0 / 1 que indica a la camara que debe encenderse
+        CAMERA_TIME: int -> tiempo por el que debe permanecer prendida.
+    Operaciones:
+        write: para encenderla.
+Sensor: Implementa interrupción INT_MOV_REGISTERED que se dispara cuando hay movimiento.
+        Registro: MOV_REGISTERED que la interrupción establecerá en 1 cuando haya movimiento.
+    Operaciones:
+        init: inicializa el sensor y establece la interrupción.
+        read: devuelve el valor del registro.
+
+
+    La interrupción es para que internamente se setee el registro MOV_REGISTERD rápidamente
+    y el registro en sí es para que la interacción con él sea a través de polling.
+
+    La interrupción directamente no tiene sentido ya que el driver del sensor no puede hacer un write a la camara para encenderla.
+
+Operaciones:
+    Para los drivers se asume el código burocrático del driver:
+    Obtener major y minor (estática o dinámicamente-mejor-),
+    Inicializar el dispositivo y registrarlo.
+
+    Auxiliar:
+    struct camara {
+        encender = 1;
+        tiempo = T
+    }
+
+    Camara:
+        Si llega otro write mientras que se está procesando, no pasa nada pues cumple con la especificación.
+        Siempre se escribe ON, y se le asigna el tiempo T de permanecer prendida.
+        int write(void* data){
+            camara encender; <- inicializamos estructura auxiliar.
+            copy_from_user(&encender, data, sizeof(encender)); <- copiamos el buffer de manera segura.
+
+            OUT(CAMERA_ON, encender.encender); <- escribimos al regsitro ON.
+            OUT(CAMERA_TIME, encender.tiempo): <- escribimos al registro TIME.
+
+            return sizeof(encender);
+        }
+
+    Sensor:
+        int init(){
+            request_irq(INT_MOV_REGISTERED, &launchCamara);
+        }
+
+        void launchCamara(int signal){
+            OUT(MOV_REGISTERD, 1);
+        }
+
+        int read(void *data){
+            int movimiento = IN(MOV_REGISTERED);
+            
+            copy_to_user(data, &movimiento, sizeof(movimiento));
+
+            //Si vamos a devolver un 1, lo reestablecemos a 0 para que no se trabe siempre en 1.
+
+            if(movimiento)
+                OUT(MOV_REGISTERED, 0);
+
+            return sizeof(movimiento);
+        }
+
+Interacción:
+
+    void main(){
+        int camara = open("/dev/camara");
+        int sensor = open("/dev/sensor");
+
+        while(true){
+            bool movement = false;
+            do{
+                read(sensor, &movement, sizeof(movement));
+            }while(!movement) //Polling, esperamos a que el registro tenga movimiento.
+
+            //encendemos camara
+            camara encender = {
+                encender = 1,
+                tiempo = T
+            }
+            write(camara, &encender, sizeof(encender)); //prendemos la camara
+
+        }
+
+    }

@@ -1,0 +1,94 @@
+2)
+Driver Palopalooza:
+    - Recibe desde web las canciones que los clientes piden.
+    Luego, busca el MP3 de la cnacipon y envía los bytes de la cancion hasta los parlantes.
+
+    Luego, el driver se encarga de enviar dicha música a alguna de las pistas disponibles -que no están pasnado musica-.
+
+    3 pistas y 3 sistemas de parlantes, ninguna debe estar sin música mientras haya pedidos.
+
+    los pedidos se atienden FIFO hasta 3 en simultáneo.
+    Consisten en una secuencia desde open hasta close.
+    Si hay 3 trabajos abiertos y no cerrados, el próximo se bloquea en open.
+
+    Mientras no se llame a close, el proceso puede seguir enviando bytes con write.
+    Al close, se reproduce hasta el final.
+
+sem_t sem;
+int devices[3];
+struct device{
+    int dev_id;
+    int isWorking;
+    int finishedLastSong;
+    queue<cancion> bufferCanciones;
+}
+
+struct cancion{
+    int cancionSize;
+    int finished;
+    char[] cancionBytes;
+}
+
+device thisDevice;
+
+int driver_init(){
+    sem_initialize(&sem, 3);
+}
+
+int open(int device_id){
+    sem.signal();//los primeros 3 pasan, a partir de ahí se bloquean hasta que se libere alguno.
+    for(int i = 0; i < 3; i++){
+        if(!devices[i]){
+            thisDevice->dev_id = i;
+        }
+    }
+}
+
+int write(int device_id, char* data, int cantidad){
+
+    void* internalData = (char*)kmalloc(cantidad, GFP_Kernel);
+
+    copy_from_user(internalData, data, cantidad);
+
+    cancion currentSong = {
+        cancionSize = cantidad;
+        cancionBytes = internalData;
+    }
+
+    thisDevice->bufferCanciones.push(currentSong);
+
+    if(!thisDevice->isWorking){
+        thisDevice->isWorking = 1;
+        cancion lastSong;
+        cancion currentSong;
+        while(currentSong = thisDevice->bufferCanciones.pop() != 0){
+            lastSong = currentSong
+            currentSongCount = 0;
+            lastSong->finished = 0;
+            while(currentSongCount < currentSong->cancionSize){
+                OUT(ADDRESS_thisDevice->dev_id, currentSong->cancionBytes)
+                currentSongCount++;
+                courrentSong->cancionBytes += 1;
+            }
+            lastSong->finished = 1;
+        }
+        thisDevice->finishedLastSong = lastSong->finished;
+    }
+}
+
+int close(int device_id){
+    while(!thisDevice->finishedLastSong){}
+    devices[thisDevice->dev_id] = 0;
+    sem.signal();
+    free(thisDevice);
+}
+
+4)
+El programa debería tener el flag SetUID prendido y su owner debería ser root para que el archivo
+/etc/shadow pueda ser accedido por cualquier usuario -desde este programa-.
+Es decir, que este usuario no necesite privilegios espciales ni que haya que alterar los permisos de dicho archivo.
+
+b) Dado que el programa correrá con privilegios elevados, si se pudiera inyectar comandos en el cmd a ejecutar dichos comandos serían ejecutados con privlegios elevados.
+
+si se llama a imprimir_habilitado(user, 123, ;/bin/bash, 12)
+entonces cmd= echo ;/bin/bash devuelve un bash root.

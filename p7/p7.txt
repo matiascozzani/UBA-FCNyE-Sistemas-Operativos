@@ -44,7 +44,6 @@ Tarde o temprano el anillo estará inundado por mensajes que contienen el id min
 Esta complejidad es en efecto, O(n²) donde n es la cantidad de mensajes, ya que cada uno envía un mensaje (n)
 pero cada vez que recibe un mensaje devuelve otra vez otro mensaje, n veces.
 
-
 Este algoritmo es conocido como LCR.
 
 La idea que propongo es la siguiente:
@@ -127,7 +126,6 @@ la transacción puede ser hecha sin problemas, dado que todos habían llegado a 
 Esos nodos que cayeron bien podrían tener un log guardado con la información que debían escribir
 y reanudar la operación en el momento en el que se levanten.
 
-
 Ahora, esto puede dar lugar a información replicada de manera inconsistente, pero también
 asegura la disponibilidad del sistema. Conjunto con esto, se exhibe una tolerancia a fallos en cierto sentido mayor.
 
@@ -137,7 +135,7 @@ la votación, el protocolo no se rompe, el resto de los nodos puede decidir en f
 Usaría uno o el otro en función de qué característica del sistema se tiene que asegurar:
 
 2PC Centralizado: consistencia de datos.
-2PC Descentralizado: disponibilidad del sistema.
+2PC Descentralizado: disponibilidad del sistema. Y ademas pueden elegir un nuevo lider.
 
 9) La solución es 2PC, y esto se debe a que es impresindible mantener la consistencia de los datos
 y efectuar las operaciones SI Y SOLO SI es posible realizarlas, y en caso de no ser posible
